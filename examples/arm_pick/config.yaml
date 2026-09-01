@@ -1,0 +1,28 @@
+# Robotic arm pick: detect a target object and alert when it is centered
+# and close enough to grasp. Uses an RGB-D sensor for metric depth.
+sensor:
+  type: realsense       # metric depth in metres (code written, unverified)
+  source: 0
+  width: 640
+  height: 480
+
+model:
+  name: yolov8n
+  confidence: 0.5
+
+tracker:
+  enabled: true
+
+depth:
+  enabled: false        # RealSense provides depth directly; no estimator
+
+decision:
+  rules:
+    # Alert when a graspable target (bottle/cup) is within arm reach.
+    - when: "label in ['bottle', 'cup'] and depth_m is not None and depth_m < 0.5"
+      action: "alert"
+      cooldown_s: 1
+
+sink:
+  type: file
+  path: arm_pick_events.jsonl

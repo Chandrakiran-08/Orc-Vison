@@ -1,0 +1,32 @@
+# Drone obstacle awareness: monocular depth + proximity alerting.
+# Emits events to stdout; a companion flight controller can subscribe or
+# read the JSONL stream. Depth here is a RELATIVE monocular estimate.
+sensor:
+  type: rgb
+  source: 0
+  width: 640
+  height: 480
+
+model:
+  name: yolov8n
+  confidence: 0.4
+
+tracker:
+  enabled: true
+
+depth:
+  enabled: true         # requires: pip install orcvision[depth]
+
+decision:
+  rules:
+    # Alert on any close obstacle (smaller monocular depth = nearer).
+    - when: "depth_m is not None and depth_m < 2.0"
+      action: "alert"
+      cooldown_s: 1
+    # Alert on people directly ahead regardless of depth.
+    - when: "label == 'person' and confidence > 0.5"
+      action: "alert"
+      cooldown_s: 2
+
+sink:
+  type: stdout

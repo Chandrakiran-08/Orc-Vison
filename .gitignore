@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Test / cache
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Orc Vision cache (downloaded models)
+.cache/orcvision/
+
+# Model weights / large artifacts
+*.pt
+*.onnx
+
+# Test fixtures that are auto-downloaded
+tests/fixtures/*.mp4
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/

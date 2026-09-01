@@ -1,0 +1,34 @@
+# Security camera: alert when a confident person is seen, or a tracked
+# person persists across several frames. Demonstrates the decision layer.
+sensor:
+  type: rgb
+  source: 0            # webcam; or a file path / rtsp:// URL
+  width: 640
+  height: 480
+
+model:
+  name: yolov8n        # or an .onnx path via `weights:`
+  confidence: 0.35
+
+tracker:
+  enabled: true        # needed for the track-based rule below
+
+depth:
+  enabled: false
+
+decision:
+  rules:
+    # Fire once, then stay quiet for 30s, on any confident person.
+    - when: "label == 'person' and confidence > 0.8"
+      action: "alert"
+      cooldown_s: 30
+    # Fire on a person tracked for 5+ consecutive frames (loitering).
+    - when: "label == 'person' and track_id is not None"
+      action: "alert"
+      min_consecutive_frames: 5
+
+sink:
+  type: mqtt
+  host: localhost
+  port: 1883
+  topic: orcvision/events

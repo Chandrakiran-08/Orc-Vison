@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orcvision"
+version = "0.1.0"
+description = "Turn vision sensors into a structured perception event stream with a rule-based decision layer."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Orc-Vison maintainers" }]
+keywords = ["computer-vision", "perception", "robotics", "detection", "onnx"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+dependencies = [
+    "typer>=0.12",
+    "pydantic>=2.5",
+    "opencv-python-headless>=4.8",
+    "paho-mqtt>=2.0",
+    "pyyaml>=6.0",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+cpu = ["onnxruntime>=1.17"]
+gpu = ["onnxruntime-gpu>=1.17"]
+yolo = ["ultralytics>=8.1"]
+depth = ["transformers>=4.38", "torch>=2.1"]
+realsense = ["pyrealsense2>=2.54"]
+dev = ["pytest>=8.0", "ruff>=0.4"]
+
+[project.scripts]
+orcvision = "orcvision.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/orcvision/orcvision"
+
+[tool.setuptools.packages.find]
+include = ["orcvision*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+ignore = ["B008"]  # typer uses function calls in defaults
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
