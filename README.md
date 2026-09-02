@@ -88,6 +88,12 @@ Each frame prints one `PerceptionEvent` as JSON:
   microcontroller, verified, usable right now to test the full
   pipeline without hardware
 
+**Microcontroller brain ports (`firmware/`):**
+- C++ (`OrcVisionBrain`) and MicroPython ports of the decision layer —
+  decision logic verified against the Python reference by a golden-vector
+  parity test, footprint measured (1284 B on the Uno R4 preset), **not
+  flash-tested on hardware**
+
 ## Sensor support
 
 Any class implementing `SensorProtocol` is a valid sensor — no registration
@@ -299,38 +305,38 @@ brain.save("~/.cache/orcvision/brain")   # weights + memory persist
 
 ### Where it runs (honest version)
 
-The two halves have very different requirements, and neither runs on a
-bare microcontroller today.
+Perception needs a real computer. The brain does not — it has ports for
+microcontrollers, in [`firmware/`](firmware/README.md).
 
 | Half | Needs | Runs on |
 |------|-------|---------|
 | Perception (`sensor → model → tracker`) | CPython + OpenCV + ONNX/Ultralytics | Linux SBC or PC. **No MCU.** |
-| Brain (`orcvision.brain`) | CPython 3.11+, stdlib only | Any Linux board with CPython, incl. Pi Zero 2 W |
-| Actuation | C++ / MicroPython | Uno R4, ESP32, Pico W — as MQTT/serial endpoints |
+| Brain — Python (`orcvision.brain`) | CPython 3.11+, stdlib only | Any CPython board, incl. Pi Zero 2 W |
+| Brain — C++ (`firmware/OrcVisionBrain/`) | C++11, ~1.3 KB RAM | **Uno R4 WiFi**, ESP32, STM32, nRF52, Teensy |
+| Brain — MicroPython (`firmware/micropython/`) | MicroPython | ESP32, Pico W |
 
-**Verified-capable of the brain layer:** anything running CPython 3.11+ —
-Raspberry Pi Zero 2 W / 3 / 4 / 5, Jetson Nano/Orin, Radxa, Orange Pi, x86
-mini-PCs. The brain's live heap is ~40 KB after 300 full decide/feedback
-cycles, so it is never the bottleneck; the *detector* decides what board
-you need.
-
-**Not capable of running the brain as written:** ESP32, RP2040 / Pico W,
-Arduino Uno R4, STM32, nRF52, Teensy. These have no CPython. The brain uses
-`dataclasses`, `typing`, `from __future__` and `pathlib`, none of which
-exist in MicroPython or CircuitPython.
-
-The intended edge topology keeps the MCU on the actuator side, which is
-what the existing firmware examples already do:
+So the Arduino Uno R4 WiFi **can** run the brain: the C++ port uses
+**1284 bytes** with its preset tuning — 3.9 % of the board's 32 KB SRAM. It
+does *not* run detection; detections arrive over MQTT from a host, and the
+board decides locally:
 
 ```
-camera ─▶ SBC (perception + brain) ─MQTT/serial─▶ MCU ─▶ motors/relay/servo
+host (camera + model) ──MQTT──▶ MCU (brain) ──▶ motors / relay / servo
 ```
 
-**Could the brain be ported to MicroPython?** Plausibly — the algorithms
-are dicts, floats and `math.exp`, and ~40 KB fits an ESP32's 520 KB RAM.
-It would need `dataclasses` → plain classes, `typing`/`__future__` removed,
-`pathlib` → `open()`, and a MicroPython-compatible `deque`. That port does
-not exist yet; nothing in this repo should be read as claiming it does.
+Putting the brain on the board means autonomy — and memory of what failed
+last time — survives the link to the host going down.
+
+All three ports are pinned to the same behaviour by a golden-vector parity
+test (`tests/test_firmware_parity.py`): 13 decisions across 8 scenarios,
+including the `AVOID → STOP` memory flip. The C++ builds clean under
+`-Wall -Wextra -Werror` with no heap allocation, no STL and no `String`.
+
+**Honest status:** the firmware's *logic* is verified against the Python
+reference on the host, and its footprint is measured. It has **not** been
+flash-tested on physical hardware, and the Arduino toolchain cross-compile
+is unverified. See [`firmware/README.md`](firmware/README.md) for the full
+status table before trusting it near an actuator.
 
 ### Safety: learning cannot override the floor
 
