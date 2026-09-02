@@ -26,9 +26,27 @@ in), :mod:`state`, :mod:`temporal`, :mod:`memory`, :mod:`decision`,
 Pure standard library: no numpy, no torch, no network, no cloud.
 """
 
-from orcvision.brain.actions import ACTION_TYPES, Action, ActionExecutor
+from orcvision.brain.actions import (
+    ACTION_TYPES,
+    DEFAULT_ACTIONS,
+    INDUSTRIAL_ACTIONS,
+    UAV_ACTIONS,
+    Action,
+    ActionExecutor,
+)
 from orcvision.brain.adapters import from_boxes, from_perception_event, from_records
+from orcvision.brain.audit import AuditLog
 from orcvision.brain.brain import BrainConfig, VisionBrain
+from orcvision.brain.constraints import (
+    BatteryConstraint,
+    Constraint,
+    GeofenceConstraint,
+    HealthConstraint,
+    KeepOutZoneConstraint,
+    StaleDataConstraint,
+    industrial_constraints,
+    uav_constraints,
+)
 from orcvision.brain.decision import (
     Decision,
     DecisionContext,
@@ -38,11 +56,24 @@ from orcvision.brain.decision import (
 from orcvision.brain.feedback import Outcome
 from orcvision.brain.memory import LongTermMemory, Memory, WorkingMemory
 from orcvision.brain.policy import LinearPolicy, Policy
-from orcvision.brain.state import ObjectState, SceneState, WorldState
+from orcvision.brain.state import ObjectState, PlatformState, SceneState, WorldState
 from orcvision.brain.temporal import BrainEvent, TemporalConfig, TemporalReasoner
 
 __all__ = [
     "ACTION_TYPES",
+    "DEFAULT_ACTIONS",
+    "INDUSTRIAL_ACTIONS",
+    "UAV_ACTIONS",
+    "AuditLog",
+    "BatteryConstraint",
+    "Constraint",
+    "GeofenceConstraint",
+    "HealthConstraint",
+    "KeepOutZoneConstraint",
+    "PlatformState",
+    "StaleDataConstraint",
+    "industrial_constraints",
+    "uav_constraints",
     "Action",
     "ActionExecutor",
     "BrainConfig",

@@ -25,9 +25,14 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
 from orcvision.brain.actions import (
+    ASCEND,
     AVOID,
     DEFAULT_ACTIONS,
+    DESCEND,
+    EMERGENCY_STOP,
+    HOVER,
     MOVE,
+    RETURN_HOME,
     SIGNAL,
     STOP,
     TRACK,
@@ -58,6 +63,20 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "WAIT|bias": 0.15,
     "SIGNAL|hazard_present": 0.30,
     "SIGNAL|bias": 0.00,
+    # Climbing over an obstacle is a real option for an aerial platform and
+    # often better than a lateral dodge, but sits just under AVOID so a
+    # ground-style evasion stays the default when both are available.
+    "ASCEND|hazard_proximity": 0.85,
+    "ASCEND|hazard_approaching": 0.70,
+    # Recovery actions are driven by the platform's own state, not the
+    # scene. These are what make the machine *choose* to come home rather
+    # than merely being forbidden from going further.
+    "RETURN_HOME|battery_low": 1.20,
+    "RETURN_HOME|outside_fence": 1.00,
+    "RETURN_HOME|platform_unhealthy": 0.60,
+    "DESCEND|battery_critical": 1.50,
+    "EMERGENCY_STOP|platform_unhealthy": 1.20,
+    "HOVER|bias": 0.20,
 }
 
 # Experience weights, applied to every action: what memory says about how
@@ -87,6 +106,10 @@ class DecisionContext:
     now: float = 0.0
     hazard_labels: frozenset[str] = frozenset({"person", "obstacle", "vehicle", "car"})
     target_labels: frozenset[str] = frozenset()
+    # Battery thresholds the recovery features are scaled against; kept here
+    # so they match whatever BatteryConstraint was configured with.
+    battery_return_pct: float = 25.0
+    battery_land_pct: float = 10.0
 
 
 @dataclass(slots=True)
@@ -164,6 +187,18 @@ class DecisionEngine(Protocol):
         ...
 
 
+def _threshold_signal(value: float | None, threshold: float) -> float:
+    """0 above the threshold; 0.5 at it, rising to 1.0 at zero.
+
+    Used for battery limits, where "just below the line" must already be a
+    decisive signal rather than a rounding error.
+    """
+    if value is None or threshold <= 0 or value >= threshold:
+        return 0.0
+    depth = (threshold - value) / threshold  # 0 at the line, 1 at empty
+    return min(1.0, 0.5 + 0.5 * depth)
+
+
 def situation_key(ctx: DecisionContext) -> str:
     """A coarse label for "situations like this one".
 
@@ -220,12 +255,29 @@ class UtilityDecisionEngine:
         if any(e.kind == "object_approaching" for e in ctx.events):
             approaching = 1.0
         targets = [o for o in ctx.world.visible() if o.label in ctx.target_labels]
+
+        # The platform's own state matters as much as the scene: most real
+        # incidents are energy, containment or health, not a missed object.
+        platform = ctx.world.platform
+        # Crossing a battery threshold is a step change, not a gentle ramp.
+        # A purely linear deficit is ~0 just below the threshold, which lets a
+        # cheap action like HOVER outrank RETURN_HOME at 22% of 25% — the
+        # aircraft would then hold station until the battery died. So the
+        # signal steps to 0.5 the moment the threshold is crossed and ramps to
+        # 1.0 at empty.
+        battery_low = _threshold_signal(platform.battery_pct, ctx.battery_return_pct)
+        battery_critical = _threshold_signal(platform.battery_pct, ctx.battery_land_pct)
+
         return {
             "hazard_proximity": proximity,
             "hazard_approaching": approaching,
             "hazard_present": 1.0 if nearest else 0.0,
             "path_clear": 1.0 - proximity,
             "target_present": 1.0 if targets else 0.0,
+            "battery_low": battery_low,
+            "battery_critical": battery_critical,
+            "outside_fence": 1.0 if platform.outside_geofence() else 0.0,
+            "platform_unhealthy": 0.0 if platform.healthy() else 1.0,
         }
 
     def memory_features(
@@ -253,6 +305,11 @@ class UtilityDecisionEngine:
             TRACK: ["target_present"],
             WAIT: [],
             SIGNAL: ["hazard_present"],
+            ASCEND: ["hazard_proximity", "hazard_approaching"],
+            DESCEND: ["battery_critical"],
+            HOVER: [],
+            RETURN_HOME: ["battery_low", "outside_fence", "platform_unhealthy"],
+            EMERGENCY_STOP: ["platform_unhealthy"],
         }
         candidates: dict[str, Features] = {}
         for action in self.actions:
@@ -341,6 +398,10 @@ class UtilityDecisionEngine:
             "bias": f"baseline preference for {action}",
             "mem_success": f"{action} previously succeeded here",
             "mem_failure": f"{action} previously failed here",
+            "battery_low": "battery below return threshold",
+            "battery_critical": "battery critically low",
+            "outside_fence": "outside the permitted envelope",
+            "platform_unhealthy": "platform unhealthy (link/interlock/emergency)",
         }.get(feature, feature)
 
     def _build_action(self, action_type: str, ctx: DecisionContext) -> Action:
@@ -361,4 +422,17 @@ class UtilityDecisionEngine:
                 params["zone"] = target.zone
         elif action_type == SIGNAL:
             params["level"] = "warning"
+        elif action_type in (ASCEND, DESCEND):
+            params["axis"] = "vertical"
+            if ctx.world.platform.altitude_m is not None:
+                params["altitude_m"] = ctx.world.platform.altitude_m
+        elif action_type == RETURN_HOME:
+            if ctx.world.platform.battery_pct is not None:
+                params["battery_pct"] = ctx.world.platform.battery_pct
+        elif action_type == EMERGENCY_STOP:
+            params["reason"] = (
+                "emergency"
+                if ctx.world.platform.emergency
+                else ("interlock" if not ctx.world.platform.interlock_ok else "link")
+            )
         return Action(type=action_type, parameters=params)

@@ -125,6 +125,77 @@ class SceneState:
 
 
 @dataclass
+class PlatformState:
+    """What the machine knows about *itself*.
+
+    Reasoning about obstacles is only half of autonomy. A UAV that cannot
+    act on its own battery level, or a machine that cannot tell its safety
+    interlock has tripped, is not deployable — most real incidents come from
+    the platform's own state, not from a missed detection.
+
+    Every field is optional and defaults to "unknown" (``None``), because a
+    given platform reports only some of them. Constraints that depend on a
+    field simply do not fire when it is unknown, so partial telemetry
+    degrades cleanly instead of raising.
+    """
+
+    # Energy — the single most common cause of UAV loss.
+    battery_pct: float | None = None  # 0..100
+    # Vertical position and limits (UAV, gantry, lift).
+    altitude_m: float | None = None
+    max_altitude_m: float | None = None
+    min_altitude_m: float | None = None
+    # Horizontal containment (UAV geofence, AGV work area).
+    distance_from_home_m: float | None = None
+    geofence_radius_m: float | None = None
+    # Motion.
+    speed_mps: float | None = None
+    max_speed_mps: float | None = None
+    # Health and interlocks.
+    link_ok: bool = True  # command/telemetry link up
+    interlock_ok: bool = True  # e-stop / light curtain / guard door closed
+    emergency: bool = False  # operator or supervisor declared an emergency
+    # Free-form extras a specific platform wants constraints to see.
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    def battery_below(self, threshold_pct: float) -> bool:
+        """True only when the battery is known AND below the threshold."""
+        return self.battery_pct is not None and self.battery_pct < threshold_pct
+
+    def outside_geofence(self) -> bool:
+        if self.distance_from_home_m is None or self.geofence_radius_m is None:
+            return False
+        return self.distance_from_home_m > self.geofence_radius_m
+
+    def altitude_out_of_band(self) -> bool:
+        if self.altitude_m is None:
+            return False
+        if self.max_altitude_m is not None and self.altitude_m > self.max_altitude_m:
+            return True
+        return self.min_altitude_m is not None and self.altitude_m < self.min_altitude_m
+
+    def healthy(self) -> bool:
+        """Whether it is safe to consider anything other than a safe action."""
+        return self.link_ok and self.interlock_ok and not self.emergency
+
+    def describe(self) -> list[str]:
+        lines: list[str] = []
+        if self.battery_pct is not None:
+            lines.append(f"Battery: {self.battery_pct:.0f}%")
+        if self.altitude_m is not None:
+            lines.append(f"Altitude: {self.altitude_m:.1f} m")
+        if self.distance_from_home_m is not None:
+            lines.append(f"Distance from home: {self.distance_from_home_m:.1f} m")
+        if not self.link_ok:
+            lines.append("Link: DOWN")
+        if not self.interlock_ok:
+            lines.append("Interlock: TRIPPED")
+        if self.emergency:
+            lines.append("EMERGENCY declared")
+        return lines
+
+
+@dataclass
 class WorldState:
     """Persistent internal model: what the brain believes is out there.
 
@@ -139,6 +210,10 @@ class WorldState:
     updated_at: float = 0.0
     tick: int = 0
     environment: dict[str, Any] = field(default_factory=dict)
+    # The machine's model of itself — battery, altitude, interlocks. See
+    # PlatformState: without this the brain can only reason about the world,
+    # never about its own capacity to act in it.
+    platform: PlatformState = field(default_factory=lambda: PlatformState())
 
     def visible(self) -> list[ObjectState]:
         """Objects observed in the most recent frame (not merely remembered)."""
@@ -180,4 +255,5 @@ class WorldState:
             lines.append(f"Object: {obj.label} | Zone: {obj.zone} | State: {obj.motion} | {depth}")
         if self.last_action:
             lines.append(f"Last action: {self.last_action}")
+        lines.extend(self.platform.describe())
         return lines

@@ -340,6 +340,44 @@ flash-tested on physical hardware, and the Arduino toolchain cross-compile
 is unverified. See [`firmware/README.md`](firmware/README.md) for the full
 status table before trusting it near an actuator.
 
+### Built for UAVs and industrial automation
+
+The brain reasons about the **machine as well as the world**. Most real
+incidents are energy, containment or health — not a missed detection — so
+`PlatformState` carries battery, altitude, geofence, link and interlock
+state, and the constraints act on it.
+
+```bash
+python examples/uav_obstacle/demo.py        # aerial platform
+python examples/industrial_safety/demo.py   # machine cell guard
+```
+
+**UAV** (`examples/uav_obstacle/`) — mission → `RETURN_HOME` below the 25%
+battery line → `DESCEND` below 10%; geofence breach returns home on a full
+battery; a lost link stops the mission; `ASCEND` lets it climb over an
+obstacle rather than only dodging. Four of the six demo decisions are made
+on telemetry, not pixels.
+
+**Industrial** (`examples/industrial_safety/`) — keep-out zones as a
+software light curtain, `EMERGENCY_STOP` on a tripped interlock, and the
+one most systems get wrong: **when the camera feed goes quiet, the cell
+stops.** Perception going stale is itself a safety event, not a reason to
+keep acting on a frozen snapshot.
+
+Three deployment properties make that possible:
+
+| | |
+|---|---|
+| **Stale-perception failsafe** | `StaleDataConstraint` forbids anything but a declared safe state once the world model is older than a limit |
+| **Frozen policy** | `brain.freeze()` pins the weights so behaviour is deterministic and reproducible — you cannot certify a machine whose policy drifts |
+| **Audit trail** | every decision appended as JSON Lines (action, weighted reasons, vetoes, platform state), rotating so it cannot fill the disk |
+
+⚠️ **Not a certified safety system.** Functional safety for machinery
+(IEC 62061, ISO 13849) and UAV airworthiness need rated, redundant,
+assessed components. Use this as a supervisory layer *behind* proper
+interlocks, light curtains, e-stops and flight-controller failsafes —
+never in place of them. Nothing here has flown or guarded a real machine.
+
 ### Safety: learning cannot override the floor
 
 A learned policy driving actuators has a real failure mode — if every

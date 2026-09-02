@@ -23,6 +23,7 @@ from typing import Any
 
 from orcvision.brain.actions import DEFAULT_ACTIONS, Action, ActionExecutor
 from orcvision.brain.adapters import from_perception_event, from_records
+from orcvision.brain.audit import AuditLog
 from orcvision.brain.constraints import Constraint
 from orcvision.brain.decision import (
     Decision,
@@ -33,7 +34,7 @@ from orcvision.brain.decision import (
 from orcvision.brain.feedback import Outcome, record_outcome
 from orcvision.brain.memory import KIND_DECISION, KIND_EVENT, Memory
 from orcvision.brain.policy import LinearPolicy
-from orcvision.brain.state import SceneState, WorldState
+from orcvision.brain.state import PlatformState, SceneState, WorldState
 from orcvision.brain.temporal import BrainEvent, TemporalConfig, TemporalReasoner
 
 
@@ -52,6 +53,14 @@ class BrainConfig:
     longterm_capacity: int = 256
     longterm_half_life_s: float = 600.0
     learning_rate: float = 0.1
+    # Production mode: freeze the policy so behaviour is deterministic and
+    # reproducible. Field learning is a liability in a safety-critical
+    # deployment — you cannot certify a machine whose policy drifts. Train
+    # offline, freeze, ship; feedback still updates memory for analysis but
+    # never moves a weight.
+    frozen: bool = False
+    # Append-only decision log for post-incident review (None disables).
+    audit_path: str | None = None
     temporal: TemporalConfig = field(default_factory=TemporalConfig)
 
 
@@ -94,6 +103,9 @@ class VisionBrain:
         )
         self.executor = executor or ActionExecutor()
         self.temporal = TemporalReasoner(self.config.temporal)
+        self.audit: AuditLog | None = (
+            AuditLog(self.config.audit_path) if self.config.audit_path else None
+        )
 
         self.world = WorldState(goal=self.config.goal)
         self.scene: SceneState | None = None
@@ -111,6 +123,43 @@ class VisionBrain:
         """Change what the brain is trying to achieve."""
         self.world.goal = goal
         self.config.goal = goal
+
+    # --- platform self-model ------------------------------------------------
+
+    @property
+    def platform(self) -> PlatformState:
+        """The machine's model of itself — battery, altitude, interlocks."""
+        return self.world.platform
+
+    def update_platform(self, **fields: Any) -> PlatformState:
+        """Feed telemetry in: ``brain.update_platform(battery_pct=23.0)``.
+
+        Constraints read this, so low battery, a tripped interlock or a lost
+        link change what the brain is allowed to do on the very next decide().
+        """
+        platform = self.world.platform
+        for name, value in fields.items():
+            if not hasattr(platform, name):
+                raise AttributeError(f"PlatformState has no field {name!r}")
+            setattr(platform, name, value)
+        return platform
+
+    def declare_emergency(self, active: bool = True) -> None:
+        """Latch an emergency; only recovery actions remain available."""
+        self.world.platform.emergency = active
+
+    # --- production mode ----------------------------------------------------
+
+    def freeze(self) -> None:
+        """Stop the policy changing. Behaviour becomes deterministic."""
+        self.config.frozen = True
+
+    def unfreeze(self) -> None:
+        self.config.frozen = False
+
+    @property
+    def frozen(self) -> bool:
+        return self.config.frozen
 
     # --- perception --------------------------------------------------------
 
@@ -154,7 +203,15 @@ class VisionBrain:
 
     # --- decision ----------------------------------------------------------
 
-    def context(self) -> DecisionContext:
+    def context(self, now: float | None = None) -> DecisionContext:
+        """Build the decision context.
+
+        ``now`` is the *current* clock, which may be later than the last
+        frame's timestamp — that gap is exactly what the stale-perception
+        failsafe measures. Defaults to the last frame's time, which reports
+        zero staleness, so a caller that wants the watchdog must pass a live
+        clock (or use ``decide(now=...)``).
+        """
         scene = self.scene or SceneState(timestamp=self.world.updated_at)
         return DecisionContext(
             scene=scene,
@@ -162,16 +219,21 @@ class VisionBrain:
             events=self.events,
             memory=self.memory,
             goal=self.world.goal,
-            now=scene.timestamp,
+            now=scene.timestamp if now is None else now,
             hazard_labels=self.config.hazard_labels,
             target_labels=self.config.target_labels,
         )
 
-    def decide(self) -> Decision:
-        """Choose an action from current state, memory and goal."""
-        decision = self.engine.decide(self.context())
+    def decide(self, now: float | None = None) -> Decision:
+        """Choose an action from current state, memory and goal.
+
+        Pass ``now`` (a live clock) on a real deployment so the
+        stale-perception failsafe can measure how old the world model is.
+        """
+        ctx = self.context(now)
+        decision = self.engine.decide(ctx)
         self.last_decision = decision
-        now = self.context().now
+        now = ctx.now
         self.memory.working.add(
             KIND_DECISION,
             f"{decision.action} ({decision.score:+.2f})",
@@ -179,6 +241,8 @@ class VisionBrain:
             label=decision.action.type,
         )
         self._pending.append((decision, now))
+        if self.audit is not None:
+            self.audit.record(decision, self.world, timestamp=now)
         return decision
 
     def execute(self, decision: Decision | None = None) -> dict[str, Any]:
@@ -217,6 +281,10 @@ class VisionBrain:
         Memory already changed the next decision the instant feedback landed;
         this generalizes the lesson into the policy itself.
         """
+        if self.config.frozen:
+            # Memory still recorded the outcome; only the weights are pinned.
+            self._last_outcome = None
+            return {"updated": False, "reason": "policy frozen (production mode)"}
         pair = getattr(self, "_last_outcome", None)
         if pair is None:
             return {"updated": False, "reason": "no outcome recorded"}

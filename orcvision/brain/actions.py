@@ -28,6 +28,18 @@ WAIT = "WAIT"
 SIGNAL = "SIGNAL"
 CUSTOM = "CUSTOM"
 
+# Vertical motion — UAVs, gantries, lifts. A ground robot's action set has
+# no way to express "climb over it", which is often a drone's best option.
+ASCEND = "ASCEND"
+DESCEND = "DESCEND"
+HOVER = "HOVER"
+# Recovery actions. RETURN_HOME is the standard UAV failsafe (low battery,
+# lost link, geofence breach). EMERGENCY_STOP is the industrial one: it is
+# distinct from STOP because it means "drop power / engage brake now",
+# not "hold position".
+RETURN_HOME = "RETURN_HOME"
+EMERGENCY_STOP = "EMERGENCY_STOP"
+
 ACTION_TYPES = (
     MOVE,
     STOP,
@@ -40,10 +52,23 @@ ACTION_TYPES = (
     WAIT,
     SIGNAL,
     CUSTOM,
+    ASCEND,
+    DESCEND,
+    HOVER,
+    RETURN_HOME,
+    EMERGENCY_STOP,
 )
 
-# A safe default repertoire for a mobile vision platform.
+# A safe default repertoire for a ground/mobile vision platform.
 DEFAULT_ACTIONS = (STOP, AVOID, MOVE, TRACK, WAIT, SIGNAL)
+
+# A UAV can also go over an obstacle, hold station, or come home — options a
+# ground platform does not have, and which change the decision materially.
+UAV_ACTIONS = (HOVER, AVOID, ASCEND, DESCEND, MOVE, TRACK, RETURN_HOME, SIGNAL)
+
+# Industrial cells are mostly "keep running or stop safely"; EMERGENCY_STOP
+# is the hard one that cuts power rather than merely holding position.
+INDUSTRIAL_ACTIONS = (MOVE, STOP, EMERGENCY_STOP, SIGNAL, WAIT, TRACK)
 
 
 @dataclass(slots=True)
