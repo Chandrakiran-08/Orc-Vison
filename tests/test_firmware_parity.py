@@ -139,9 +139,7 @@ def test_micropython_port_reproduces_the_memory_flip():
     def approach(base):
         for i, depth in enumerate([4.0, 3.0, 2.0, 1.2]):
             brain.begin_frame(base + i * 0.5)
-            brain.observe_pixels(
-                "obstacle", 0.9, 280, 200, 360, 300, 640, 480, depth, 1
-            )
+            brain.observe_pixels("obstacle", 0.9, 280, 200, 360, 300, 640, 480, depth, 1)
             brain.end_frame()
 
     approach(0.0)
@@ -185,11 +183,19 @@ def test_cpp_port_matches_reference(tmp_path):
     binary = tmp_path / "parity"
     compile_result = subprocess.run(
         [
-            "g++", "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
-            "-I", str(CPP_DIR / "src"),
-            "-I", str(CPP_DIR / "tests"),
+            "g++",
+            "-std=c++11",
+            "-O2",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-I",
+            str(CPP_DIR / "src"),
+            "-I",
+            str(CPP_DIR / "tests"),
             str(CPP_DIR / "tests" / "parity_test.cpp"),
-            "-o", str(binary),
+            "-o",
+            str(binary),
         ],
         capture_output=True,
         text=True,
@@ -211,7 +217,7 @@ def test_cpp_brain_fits_in_uno_r4_sram(tmp_path):
         "#define OV_MAX_TRACES 10\n"
         '#include "OrcVisionBrain.h"\n'
         "#include <stdio.h>\n"
-        "int main(){ printf(\"%u\\n\", (unsigned)sizeof(OrcVisionBrain)); return 0; }\n",
+        'int main(){ printf("%u\\n", (unsigned)sizeof(OrcVisionBrain)); return 0; }\n',
         encoding="utf-8",
     )
     binary = tmp_path / "size"
@@ -230,8 +236,7 @@ def test_cpp_library_uses_no_dynamic_allocation():
     """No heap on an MCU: fragmentation there is a field failure, not a warning."""
     source = (CPP_DIR / "src" / "OrcVisionBrain.h").read_text(encoding="utf-8")
     code = "\n".join(
-        line for line in source.splitlines()
-        if not line.strip().startswith(("*", "//", "/*"))
+        line for line in source.splitlines() if not line.strip().startswith(("*", "//", "/*"))
     )
     for banned in ("malloc(", "calloc(", "realloc(", "new ", "std::", "String "):
         assert banned not in code, f"{banned} must not appear in MCU firmware"
@@ -253,12 +258,12 @@ def test_cpp_does_not_collapse_two_same_label_objects(tmp_path):
         '#include "OrcVisionBrain.h"\n'
         "#include <stdio.h>\n"
         "int main(){\n"
-        "  OrcVisionBrain b; b.begin(); b.addHazardLabel(\"person\");\n"
+        '  OrcVisionBrain b; b.begin(); b.addHazardLabel("person");\n'
         "  b.beginFrame(0.0f);\n"
-        "  b.observe(\"person\",0.9f,0.30f,0.5f,0.02f,3.0f,-1);\n"
-        "  b.observe(\"person\",0.9f,0.34f,0.5f,0.02f,3.0f,-1);\n"
+        '  b.observe("person",0.9f,0.30f,0.5f,0.02f,3.0f,-1);\n'
+        '  b.observe("person",0.9f,0.34f,0.5f,0.02f,3.0f,-1);\n'
         "  b.endFrame();\n"
-        "  printf(\"%u\\n\", b.visibleCount());\n"
+        '  printf("%u\\n", b.visibleCount());\n'
         "  return 0; }\n",
         encoding="utf-8",
     )
@@ -285,8 +290,8 @@ def test_cpp_explain_survives_non_finite_scores(tmp_path):
         "#include <stdio.h>\n"
         "#include <math.h>\n"
         "int main(){\n"
-        "  OrcVisionBrain b; b.begin(); b.addHazardLabel(\"obstacle\");\n"
-        "  b.beginFrame(0.0f); b.observe(\"obstacle\",0.9f,0.5f,0.5f,0.05f,1.0f,1); b.endFrame();\n"
+        '  OrcVisionBrain b; b.begin(); b.addHazardLabel("obstacle");\n'
+        '  b.beginFrame(0.0f); b.observe("obstacle",0.9f,0.5f,0.5f,0.05f,1.0f,1); b.endFrame();\n'
         "  char buf[256];\n"
         "  const float vals[3] = {1e30f, NAN, -INFINITY};\n"
         "  for (int i=0;i<3;i++){\n"
@@ -299,7 +304,7 @@ def test_cpp_explain_survives_non_finite_scores(tmp_path):
         "      if (c != '\\n' && (c < 32 || c > 126)) { printf(\"BAD\\n\"); return 1; }\n"
         "    }\n"
         "  }\n"
-        "  printf(\"OK\\n\"); return 0; }\n",
+        '  printf("OK\\n"); return 0; }\n',
         encoding="utf-8",
     )
     binary = tmp_path / "nonfinite"
@@ -317,9 +322,7 @@ def test_cpp_rejects_label_table_larger_than_the_bitmask(tmp_path):
     """A >16 label table would silently stop marking hazards. Fail the build."""
     probe = tmp_path / "toomany.cpp"
     probe.write_text(
-        "#define OV_MAX_LABELS 20\n"
-        '#include "OrcVisionBrain.h"\n'
-        "int main(){ return 0; }\n",
+        '#define OV_MAX_LABELS 20\n#include "OrcVisionBrain.h"\nint main(){ return 0; }\n',
         encoding="utf-8",
     )
     result = subprocess.run(
@@ -341,8 +344,12 @@ def test_corrupt_policy_file_does_not_crash_the_brain(tmp_path):
         json.dumps(
             {
                 "learning_rate": "fast",
-                "weights": {"STOP|bias": "not-a-number", "MOVE|bias": None,
-                            "AVOID|bias": 0.5, "WAIT|bias": float("inf")},
+                "weights": {
+                    "STOP|bias": "not-a-number",
+                    "MOVE|bias": None,
+                    "AVOID|bias": 0.5,
+                    "WAIT|bias": float("inf"),
+                },
             }
         ),
         encoding="utf-8",
@@ -362,10 +369,18 @@ def test_corrupt_memory_file_does_not_crash_the_brain(tmp_path):
 
     (tmp_path / "policy.json").write_text(json.dumps({"weights": {}}), encoding="utf-8")
     (tmp_path / "memory.json").write_text(
-        json.dumps({"good": {"kind": "outcome", "content": {"successes": 1},
-                             "importance": 0.5, "hits": 1},
-                    "bad_str": "not-a-dict",
-                    "bad_num": 42}),
+        json.dumps(
+            {
+                "good": {
+                    "kind": "outcome",
+                    "content": {"successes": 1},
+                    "importance": 0.5,
+                    "hits": 1,
+                },
+                "bad_str": "not-a-dict",
+                "bad_num": 42,
+            }
+        ),
         encoding="utf-8",
     )
     brain = VisionBrain(goal="avoid_collision")
@@ -390,17 +405,17 @@ def test_epoch_timestamps_corrupt_motion_rates(tmp_path):
         '#include "OrcVisionBrain.h"\n'
         "#include <stdio.h>\n"
         "static float rate(float t0, float step){\n"
-        "  OrcVisionBrain b; b.begin(); b.addHazardLabel(\"obstacle\");\n"
+        '  OrcVisionBrain b; b.begin(); b.addHazardLabel("obstacle");\n'
         "  float depths[4] = {4.0f,3.0f,2.0f,1.2f};\n"
         "  for (int i=0;i<4;i++){\n"
         "    b.beginFrame(t0 + (float)i*step);\n"
-        "    b.observe(\"obstacle\",0.9f,0.5f,0.5f,0.05f,depths[i],1);\n"
+        '    b.observe("obstacle",0.9f,0.5f,0.5f,0.05f,depths[i],1);\n'
         "    b.endFrame();\n"
         "  }\n"
         "  const OvObject* o = b.objectAt(0);\n"
         "  return o ? o->approach_rate : 0.0f;\n"
         "}\n"
-        "int main(){ printf(\"%.6g %.6g\\n\", rate(12.0f,0.5f), rate(1788240924.0f,0.5f));\n"
+        'int main(){ printf("%.6g %.6g\\n", rate(12.0f,0.5f), rate(1788240924.0f,0.5f));\n'
         "  return 0; }\n",
         encoding="utf-8",
     )

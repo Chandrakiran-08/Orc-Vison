@@ -149,14 +149,16 @@ mpremote cp firmware/micropython/orcvision_brain.py :
 
 ```python
 from orcvision_brain import VisionBrain
+
 brain = VisionBrain(goal="avoid_collision")
 brain.begin_frame(t)
 brain.observe("obstacle", 0.9, cx, cy, size, depth_m=1.2, track_id=1)
 brain.end_frame()
 d = brain.decide()
 print(d.explain())
-brain.feedback(False); brain.learn()
-brain.save("brain.json")     # survives a power cycle
+brain.feedback(False)
+brain.learn()
+brain.save("brain.json")  # survives a power cycle
 ```
 
 ## What the MCU does *not* do

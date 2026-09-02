@@ -223,8 +223,13 @@ def run(
                     cv2.rectangle(vis, (x1, y1), (x2, y2), color, 2)
                     label = f"{det.label} {det.confidence:.2f}"
                     cv2.putText(
-                        vis, label, (x1, max(y1 - 8, 0)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2,
+                        vis,
+                        label,
+                        (x1, max(y1 - 8, 0)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        color,
+                        2,
                     )
                 cv2.imshow("Orc-Vison", vis)
                 # 1ms poll so the window redraws; 'q' or Esc quits cleanly.

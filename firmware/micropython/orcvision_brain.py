@@ -111,8 +111,19 @@ def default_weights():
 
 class ObjectState:
     __slots__ = (
-        "label", "confidence", "cx", "cy", "size", "depth_m", "track_id",
-        "zone", "motion", "approach_rate", "first_seen", "last_seen", "misses",
+        "label",
+        "confidence",
+        "cx",
+        "cy",
+        "size",
+        "depth_m",
+        "track_id",
+        "zone",
+        "motion",
+        "approach_rate",
+        "first_seen",
+        "last_seen",
+        "misses",
     )
 
     def __init__(self, label, confidence, cx, cy, size, depth_m, track_id, now):
@@ -209,8 +220,9 @@ class LongTermMemory:
         return t
 
     def forget(self, now):
-        for key in [k for k, t in self._traces.items()
-                    if self._strength(t, now) < self.forget_below]:
+        for key in [
+            k for k, t in self._traces.items() if self._strength(t, now) < self.forget_below
+        ]:
             del self._traces[key]
         overflow = len(self._traces) - self.capacity
         if overflow > 0:
@@ -226,8 +238,17 @@ class LongTermMemory:
 
 
 class Decision:
-    __slots__ = ("action", "score", "reasons", "features", "situation",
-                 "vetoed", "demoted", "safety_fallback", "avoid_direction")
+    __slots__ = (
+        "action",
+        "score",
+        "reasons",
+        "features",
+        "situation",
+        "vetoed",
+        "demoted",
+        "safety_fallback",
+        "avoid_direction",
+    )
 
     def __init__(self, action, score, situation):
         self.action = action
@@ -256,9 +277,17 @@ class Decision:
 class VisionBrain:
     """The decision loop, MicroPython edition."""
 
-    def __init__(self, goal="idle", hazard_labels=None, target_labels=None,
-                 max_range_m=5.0, working_capacity=24, longterm_capacity=24,
-                 learning_rate=0.1, safe_action=STOP):
+    def __init__(
+        self,
+        goal="idle",
+        hazard_labels=None,
+        target_labels=None,
+        max_range_m=5.0,
+        working_capacity=24,
+        longterm_capacity=24,
+        learning_rate=0.1,
+        safe_action=STOP,
+    ):
         self.goal = goal
         self.hazard_labels = hazard_labels or ("person", "obstacle", "vehicle", "car")
         self.target_labels = target_labels or ()
@@ -296,11 +325,11 @@ class VisionBrain:
         self._any_approach = False
 
     def observe(self, label, confidence, cx, cy, size, depth_m=None, track_id=None):
-        self._pending.append((label, confidence, _clamp01(cx), _clamp01(cy),
-                              _clamp01(size), depth_m, track_id))
+        self._pending.append(
+            (label, confidence, _clamp01(cx), _clamp01(cy), _clamp01(size), depth_m, track_id)
+        )
 
-    def observe_pixels(self, label, confidence, x1, y1, x2, y2, w, h,
-                       depth_m=None, track_id=None):
+    def observe_pixels(self, label, confidence, x1, y1, x2, y2, w, h, depth_m=None, track_id=None):
         if not w or not h:
             return
         cx = ((x1 + x2) / 2.0) / w
@@ -317,10 +346,8 @@ class VisionBrain:
         for label, conf, cx, cy, size, depth, track in self._pending:
             key = self._associate(label, cx, cy, track)
             if key is None:
-                key = f"{label}#{track}" if track is not None else \
-                      f"{label}~{len(self.objects)}"
-                self.objects[key] = ObjectState(label, conf, cx, cy, size, depth,
-                                                track, self._now)
+                key = f"{label}#{track}" if track is not None else f"{label}~{len(self.objects)}"
+                self.objects[key] = ObjectState(label, conf, cx, cy, size, depth, track, self._now)
             else:
                 self._update_matched(self.objects[key], conf, cx, cy, size, depth, dt)
             seen.add(key)
@@ -360,9 +387,11 @@ class VisionBrain:
         growth = (size - obj.size) / obj.size if obj.size > 0 else 0.0
 
         approaching = rate > self.approach_threshold or (
-            depth is None and growth > self.size_growth_threshold)
+            depth is None and growth > self.size_growth_threshold
+        )
         receding = rate < -self.approach_threshold or (
-            depth is None and growth < -self.size_growth_threshold)
+            depth is None and growth < -self.size_growth_threshold
+        )
 
         if approaching:
             obj.motion = MOTION_APPROACHING
@@ -493,8 +522,7 @@ class VisionBrain:
 
         fallback = chosen is None
         if fallback:
-            score, contributions = self._score(self.safe_action,
-                                               candidates[self.safe_action])
+            score, contributions = self._score(self.safe_action, candidates[self.safe_action])
             chosen = (self.safe_action, score, contributions)
 
         action, score, contributions = chosen
@@ -502,8 +530,7 @@ class VisionBrain:
         d.features = candidates
         d.vetoed = vetoed
         d.safety_fallback = fallback
-        d.reasons = [(name, value) for name, value in contributions.items()
-                     if abs(value) > 1e-9]
+        d.reasons = [(name, value) for name, value in contributions.items() if abs(value) > 1e-9]
         for other in ACTIONS:
             if other == action:
                 continue
@@ -538,8 +565,7 @@ class VisionBrain:
         trace = self.longterm.recall(key, self._now)
         content = dict(trace["content"]) if trace else {"successes": 0, "failures": 0}
         content["successes" if success else "failures"] += 1
-        self.longterm.remember(key, content, self._now,
-                               importance=0.6 if success else 0.85)
+        self.longterm.remember(key, content, self._now, importance=0.6 if success else 0.85)
         self.working.add(("outcome", self._now, d.action, success))
         self._outcome = (d, reward)
         return content

@@ -242,12 +242,12 @@ TRIAL 2   identical input                   ->  STOP
 from orcvision.brain import VisionBrain
 
 brain = VisionBrain(goal="avoid_collision")
-brain.observe(vision_output)     # PerceptionEvent, dicts, or a SceneState
+brain.observe(vision_output)  # PerceptionEvent, dicts, or a SceneState
 decision = brain.decide()
-print(decision.explain())        # every decision is inspectable
-brain.execute(decision)          # Action -> your hardware executor
-brain.feedback(success=False)    # outcome -> memory (changes next decision)
-brain.learn()                    # outcome -> policy weights
+print(decision.explain())  # every decision is inspectable
+brain.execute(decision)  # Action -> your hardware executor
+brain.feedback(success=False)  # outcome -> memory (changes next decision)
+brain.learn()  # outcome -> policy weights
 ```
 
 Attach it to the live pipeline instead:
@@ -266,9 +266,11 @@ The brain never imports a detector. Any perception source works:
 
 ```python
 from orcvision.brain import from_records
+
 scene = from_records(
     [{"label": "obstacle", "confidence": 0.9, "bbox": (0.4, 0.4, 0.6, 0.6)}],
-    timestamp=t, normalized=True,      # embedded pipelines often skip pixels
+    timestamp=t,
+    normalized=True,  # embedded pipelines often skip pixels
 )
 ```
 
@@ -298,9 +300,9 @@ The policy is a linear model over named features — a trained policy is a few
 dozen floats — and every decision decomposes into readable terms:
 
 ```python
-brain.policy.fit(dataset, epochs=10)     # imitation / supervised
+brain.policy.fit(dataset, epochs=10)  # imitation / supervised
 brain.policy.reinforce(action, feats, reward)  # RL-compatible
-brain.save("~/.cache/orcvision/brain")   # weights + memory persist
+brain.save("~/.cache/orcvision/brain")  # weights + memory persist
 ```
 
 ### Where it runs (honest version)
