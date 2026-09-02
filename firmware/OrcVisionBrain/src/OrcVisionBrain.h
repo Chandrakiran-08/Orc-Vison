@@ -79,6 +79,14 @@ enum OvFeature : uint8_t {
   OV_NUM_FEATURES = 8
 };
 
+// Hazard/target membership is a uint16_t bitmask indexed by label id, so a
+// label table larger than 16 would leave high-numbered labels permanently
+// unable to be marked as hazards — a silent safety failure rather than a
+// visible error. Fail the build instead.
+#if OV_MAX_LABELS > 16
+#error "OV_MAX_LABELS must be <= 16 (hazard/target masks are 16-bit)"
+#endif
+
 enum OvZone : uint8_t { OV_ZONE_LEFT = 0, OV_ZONE_CENTER = 1, OV_ZONE_RIGHT = 2 };
 
 enum OvMotion : uint8_t {
@@ -606,9 +614,16 @@ class OrcVisionBrain {
 
   // Track-id match first; otherwise nearest same-label object in radius, so
   // the brain still keeps identity behind a detector with no tracker.
+  //
+  // Slots already claimed by an earlier detection in THIS frame are skipped.
+  // Without that, two nearby same-label detections (two people standing
+  // together, with no tracker supplying ids) both associate to the same
+  // stored object and silently collapse into one — the brain would then
+  // reason about one person where there are two.
   int8_t associate(const OvPending& obs) const {
     if (obs.track_id >= 0) {
       for (uint8_t i = 0; i < OV_MAX_OBJECTS; ++i) {
+        if (seen_[i]) continue;
         if (objects_[i].used && objects_[i].track_id == obs.track_id &&
             objects_[i].label_id == obs.label_id) {
           return (int8_t)i;
@@ -619,6 +634,7 @@ class OrcVisionBrain {
     int8_t best = -1;
     float best_dist = cfg_.match_radius;
     for (uint8_t i = 0; i < OV_MAX_OBJECTS; ++i) {
+      if (seen_[i]) continue;
       if (!objects_[i].used || objects_[i].label_id != obs.label_id) continue;
       float dx = objects_[i].cx - obs.cx;
       float dy = objects_[i].cy - obs.cy;
@@ -825,11 +841,21 @@ class OrcVisionBrain {
     return w;
   }
 
+  // Format a float as +/-D[DD].DD without pulling in printf's float support.
+  //
+  // Casting a non-finite or out-of-range float to int is undefined
+  // behaviour, and weights can genuinely run away under repeated reward
+  // updates, so both cases are handled explicitly rather than trusted not
+  // to happen.
   static size_t appendFloat(char* buf, size_t cap, size_t n, float v) {
-    char tmp[16];
+    if (isnan(v)) return appendStr(buf, cap, n, "nan");
     bool neg = v < 0.0f;
     if (neg) v = -v;
-    int whole = (int)v;
+    if (isinf(v)) return appendStr(buf, cap, n, neg ? "-inf" : "+inf");
+    if (v > 999.0f) return appendStr(buf, cap, n, neg ? "-big" : "+big");
+
+    char tmp[16];
+    int whole = (int)v;  // safe: v is finite and <= 999 here
     int frac = (int)((v - (float)whole) * 100.0f + 0.5f);
     if (frac >= 100) {
       frac = 0;
@@ -837,6 +863,7 @@ class OrcVisionBrain {
     }
     size_t i = 0;
     tmp[i++] = neg ? '-' : '+';
+    if (whole >= 100) tmp[i++] = (char)('0' + (whole / 100) % 10);
     if (whole >= 10) tmp[i++] = (char)('0' + (whole / 10) % 10);
     tmp[i++] = (char)('0' + whole % 10);
     tmp[i++] = '.';

@@ -229,21 +229,37 @@ class LongTermMemory:
             for k, t in self._traces.items()
         }
 
-    def restore(self, data: dict[str, Any]) -> None:
-        """Load a snapshot produced by :meth:`snapshot`."""
-        self._traces = {
-            k: MemoryTrace(
-                key=k,
-                kind=v.get("kind", KIND_EVENT),
-                content=v.get("content"),
-                importance=float(v.get("importance", 0.5)),
-                created_at=float(v.get("created_at", 0.0)),
-                last_reinforced=float(v.get("last_reinforced", 0.0)),
-                last_access=float(v.get("last_reinforced", 0.0)),
-                hits=int(v.get("hits", 1)),
-            )
-            for k, v in data.items()
-        }
+    def restore(self, data: dict[str, Any]) -> int:
+        """Load a snapshot produced by :meth:`snapshot`.
+
+        Malformed entries are skipped rather than raising: this state is
+        read back from disk on an autonomous system, and a truncated write,
+        a corrupted card or a hand-edited file must not crash the brain
+        mid-run. Returns the number of entries rejected.
+        """
+        traces: dict[str, MemoryTrace] = {}
+        rejected = 0
+        if not isinstance(data, dict):
+            return 0
+        for key, value in data.items():
+            if not isinstance(key, str) or not isinstance(value, dict):
+                rejected += 1
+                continue
+            try:
+                traces[key] = MemoryTrace(
+                    key=key,
+                    kind=str(value.get("kind", KIND_EVENT)),
+                    content=value.get("content"),
+                    importance=float(value.get("importance", 0.5)),
+                    created_at=float(value.get("created_at", 0.0)),
+                    last_reinforced=float(value.get("last_reinforced", 0.0)),
+                    last_access=float(value.get("last_reinforced", 0.0)),
+                    hits=int(value.get("hits", 1)),
+                )
+            except (TypeError, ValueError):
+                rejected += 1
+        self._traces = traces
+        return rejected
 
 
 @dataclass

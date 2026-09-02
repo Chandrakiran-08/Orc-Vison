@@ -26,6 +26,7 @@ refined online from outcomes.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -145,5 +146,26 @@ class LinearPolicy:
 
     @classmethod
     def load(cls, path: str | Path) -> LinearPolicy:
+        """Load weights from disk, discarding anything not numeric.
+
+        A weight file is persisted state that may be truncated, corrupted or
+        edited by hand. A non-numeric value would otherwise surface as a
+        TypeError deep inside scoring, mid-decision, on a running machine —
+        so bad entries are dropped at load time instead.
+        """
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-        return cls(weights=data.get("weights", {}), learning_rate=data.get("learning_rate", 0.1))
+        if not isinstance(data, dict):
+            return cls()
+
+        weights: dict[str, float] = {}
+        for key, value in (data.get("weights") or {}).items():
+            if isinstance(key, str) and isinstance(value, (int, float)):
+                if not isinstance(value, bool) and math.isfinite(value):
+                    weights[key] = float(value)
+
+        rate = data.get("learning_rate", 0.1)
+        if not isinstance(rate, (int, float)) or isinstance(rate, bool):
+            rate = 0.1
+        elif not math.isfinite(rate):
+            rate = 0.1
+        return cls(weights=weights, learning_rate=float(rate))

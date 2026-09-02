@@ -107,6 +107,36 @@ SCENARIOS: list[tuple[str, list]] = [
             ("decide",),
         ],
     ),
+    (
+        "two_people_must_not_collapse",
+        [
+            ("frame", 0.0, [
+                ("person", 0.9, (180, 200, 260, 300), 3.0, None),
+                ("person", 0.9, (200, 200, 280, 300), 3.0, None),
+            ]),
+            ("frame", 0.5, [
+                ("person", 0.9, (185, 200, 265, 300), 2.5, None),
+                ("person", 0.9, (205, 200, 285, 300), 2.5, None),
+            ]),
+            ("decide",),
+        ],
+    ),
+    (
+        "crowd_with_track_ids",
+        [
+            ("frame", 0.0, [
+                ("person", 0.9, (40, 200, 120, 300), 3.0, 1),
+                ("person", 0.9, (280, 200, 360, 300), 2.0, 2),
+                ("person", 0.9, (520, 200, 600, 300), 4.0, 3),
+            ]),
+            ("frame", 0.5, [
+                ("person", 0.9, (40, 200, 120, 300), 2.8, 1),
+                ("person", 0.9, (280, 200, 360, 300), 1.2, 2),
+                ("person", 0.9, (520, 200, 600, 300), 3.9, 3),
+            ]),
+            ("decide",),
+        ],
+    ),
 ]
 
 
@@ -191,7 +221,8 @@ def main() -> None:
                 if dets:
                     items = ", ".join(
                         '{{"{}", {:.6f}f, {:.1f}f, {:.1f}f, {:.1f}f, {:.1f}f, {}, {}}}'.format(
-                            label, conf, *bbox, c_literal(depth), tid
+                            # track_id: C uses -1 for "no id", Python uses None
+                            label, conf, *bbox, c_literal(depth), -1 if tid is None else tid
                         )
                         for label, conf, bbox, depth, tid in dets
                     )

@@ -115,6 +115,22 @@ static const GoldenStep success_keeps_choice_steps[] = {
   {1, 0.0f, 0, nullptr, 0, "AVOID"},  // score +1.3990
 };
 
+static const GoldenDet two_people_must_not_collapse_dets_0[] = {{"person", 0.900000f, 180.0f, 200.0f, 260.0f, 300.0f, 3.000000f, -1}, {"person", 0.900000f, 200.0f, 200.0f, 280.0f, 300.0f, 3.000000f, -1}};
+static const GoldenDet two_people_must_not_collapse_dets_1[] = {{"person", 0.900000f, 185.0f, 200.0f, 265.0f, 300.0f, 2.500000f, -1}, {"person", 0.900000f, 205.0f, 200.0f, 285.0f, 300.0f, 2.500000f, -1}};
+static const GoldenStep two_people_must_not_collapse_steps[] = {
+  {0, 0.000000f, 2, two_people_must_not_collapse_dets_0, 0, nullptr},
+  {0, 0.500000f, 2, two_people_must_not_collapse_dets_1, 0, nullptr},
+  {1, 0.0f, 0, nullptr, 0, "AVOID"},  // score +1.4500
+};
+
+static const GoldenDet crowd_with_track_ids_dets_0[] = {{"person", 0.900000f, 40.0f, 200.0f, 120.0f, 300.0f, 3.000000f, 1}, {"person", 0.900000f, 280.0f, 200.0f, 360.0f, 300.0f, 2.000000f, 2}, {"person", 0.900000f, 520.0f, 200.0f, 600.0f, 300.0f, 4.000000f, 3}};
+static const GoldenDet crowd_with_track_ids_dets_1[] = {{"person", 0.900000f, 40.0f, 200.0f, 120.0f, 300.0f, 2.800000f, 1}, {"person", 0.900000f, 280.0f, 200.0f, 360.0f, 300.0f, 1.200000f, 2}, {"person", 0.900000f, 520.0f, 200.0f, 600.0f, 300.0f, 3.900000f, 3}};
+static const GoldenStep crowd_with_track_ids_steps[] = {
+  {0, 0.000000f, 3, crowd_with_track_ids_dets_0, 0, nullptr},
+  {0, 0.500000f, 3, crowd_with_track_ids_dets_1, 0, nullptr},
+  {1, 0.0f, 0, nullptr, 0, "AVOID"},  // score +1.7100
+};
+
 static const GoldenScenario GOLDEN_SCENARIOS[] = {
   {"closing_obstacle_center", (int)(sizeof(closing_obstacle_center_steps) / sizeof(GoldenStep)), closing_obstacle_center_steps},
   {"memory_flips_choice", (int)(sizeof(memory_flips_choice_steps) / sizeof(GoldenStep)), memory_flips_choice_steps},
@@ -124,6 +140,8 @@ static const GoldenScenario GOLDEN_SCENARIOS[] = {
   {"person_hazard_no_depth", (int)(sizeof(person_hazard_no_depth_steps) / sizeof(GoldenStep)), person_hazard_no_depth_steps},
   {"repeated_failures_degrade_safely", (int)(sizeof(repeated_failures_degrade_safely_steps) / sizeof(GoldenStep)), repeated_failures_degrade_safely_steps},
   {"success_keeps_choice", (int)(sizeof(success_keeps_choice_steps) / sizeof(GoldenStep)), success_keeps_choice_steps},
+  {"two_people_must_not_collapse", (int)(sizeof(two_people_must_not_collapse_steps) / sizeof(GoldenStep)), two_people_must_not_collapse_steps},
+  {"crowd_with_track_ids", (int)(sizeof(crowd_with_track_ids_steps) / sizeof(GoldenStep)), crowd_with_track_ids_steps},
 };
 static const int GOLDEN_SCENARIO_COUNT = (int)(sizeof(GOLDEN_SCENARIOS) / sizeof(GoldenScenario));
 

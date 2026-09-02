@@ -27,6 +27,15 @@
  * RAM: the brain itself is ~1.5 KB with the tuning below. The JSON document
  * is the larger consumer; shrink JSON_CAPACITY if you are tight.
  *
+ * SECURITY: this example uses plain MQTT with no authentication and no TLS.
+ * Anyone who can reach the broker can publish detections (making the board
+ * react to a hazard that is not there) or publish feedback (writing directly
+ * into the brain's long-term memory). There is no sender identity, message
+ * authentication or replay protection here. Fine on an isolated bench;
+ * enable MQTT auth + TLS and per-topic ACLs before this drives anything that
+ * moves, and keep a hardware interlock no firmware path can override.
+ * See firmware/README.md for the full posture.
+ *
  * NOTE: This sketch has NOT been flash-tested on hardware by the project
  * maintainers. The decision logic it calls into is verified against the
  * Python reference by a host-side parity test, but on-device behaviour is

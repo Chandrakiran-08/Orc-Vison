@@ -83,6 +83,40 @@ The firmware is written carefully and its logic is tested, but nobody has
 put it on a board. Treat on-device behaviour as unproven until you confirm
 it yourself, and keep the actuator harmless (onboard LED) on first run.
 
+## Security posture — read before wiring an actuator
+
+The examples use **plain MQTT with no authentication and no TLS**, because
+that is what a `mosquitto -v` bench setup gives you. Understand what that
+means before this drives anything that moves:
+
+**Anyone who can reach the broker can drive your hardware.** The board acts
+on whatever arrives on `orcvision/events`, and a forged detection ("obstacle
+at 0.3 m") makes it react. Feedback is worse: anyone publishing to
+`orcvision/feedback` writes directly into the brain's long-term memory and
+can teach it that a correct action is wrong. There is no message
+authentication, no replay protection, and no sender identity anywhere in
+this design.
+
+The safety constraints still hold under forged input — they are evaluated
+after scoring and cannot be learned away, so a poisoned policy still cannot
+advance into a hazard the board can see. But a forged *detection* changes
+what the board believes it can see, and no amount of local logic fixes that.
+
+If this leaves the bench:
+
+- Put the broker and boards on an isolated VLAN or a dedicated AP, not the
+  house/office network.
+- Turn on MQTT authentication (`password_file`) and TLS
+  (`mosquitto` `cafile`/`certfile`/`keyfile`); set `allow_anonymous false`.
+- Restrict topics per client with a mosquitto ACL so a compromised sensor
+  cannot publish feedback.
+- Keep a hardware interlock — an e-stop or current limit — that no firmware
+  path can override. Treat the software safety floor as defence in depth,
+  never as the only thing between a motor and a person.
+
+None of this is exotic; it is just not on by default, and the examples do
+not pretend otherwise.
+
 ## Quick start — Arduino (Uno R4 WiFi, ESP32, ...)
 
 1. Copy `firmware/OrcVisionBrain/` into your Arduino `libraries/` folder
