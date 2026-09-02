@@ -26,6 +26,10 @@ class PerceptionEvent(BaseModel):
     frame_shape: tuple[int, int]  # (height, width)
     detections: list[Detection] = Field(default_factory=list)
     alerts: list[str] = Field(default_factory=list)  # populated by decision layer
+    # Optional autonomous-brain output (orcvision.brain). Null unless the
+    # brain layer is enabled, so existing consumers — including the
+    # microcontroller sketches, which read `alerts` — are unaffected.
+    decision: dict | None = None
 
     def to_json(self) -> str:
         return self.model_dump_json()

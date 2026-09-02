@@ -12,8 +12,18 @@ from scratch.
 ```
 sensor ──▶ model ──▶ tracker ──▶ decision rules ──▶ sink (stdout/mqtt/file)
  (rgb)     (onnx/     (track_id)   (alerts[])         JSON PerceptionEvent
-           yolo)
+           yolo)                        │
+                                        ▼
+                         ┌──────────────────────────────┐
+                         │  autonomous brain (optional) │
+                         │  state ▸ memory ▸ decision   │
+                         │  ▸ action ▸ feedback ▸ learn │
+                         └──────────────────────────────┘
 ```
+
+Perception is the "eyes and reflexes"; the optional
+[**brain layer**](#autonomous-brain) adds the part that remembers, decides
+and learns. It is model-agnostic — YOLO is just one possible input.
 
 ## Install
 
@@ -196,6 +206,113 @@ legacy `action: when` when none are set). The same safe AST evaluator backs
 both — event-scope expressions may only call the four helpers above; no
 other calls, attribute access, or arbitrary code is ever evaluated.
 
+## Autonomous brain
+
+The decision rules above are *reflexes* — they see one frame and fire. The
+brain layer (`orcvision.brain`) is the intelligence above perception: it
+keeps state, remembers outcomes, and decides.
+
+```
+Perception → State → Memory → Decision → Action → Feedback → (loop)
+```
+
+The difference in one line: **given identical perception input, the brain
+can choose a different action, because it remembers how the last one
+turned out.**
+
+```bash
+python examples/autonomous_brain/demo.py   # no camera/model/network needed
+```
+
+```
+TRIAL 1   obstacle closing 4.0 m -> 1.2 m   ->  AVOID(direction=right)
+   >>> feedback: that failed (clipped the obstacle)
+TRIAL 2   identical input                   ->  STOP
+```
+
+### API
+
+```python
+from orcvision.brain import VisionBrain
+
+brain = VisionBrain(goal="avoid_collision")
+brain.observe(vision_output)     # PerceptionEvent, dicts, or a SceneState
+decision = brain.decide()
+print(decision.explain())        # every decision is inspectable
+brain.execute(decision)          # Action -> your hardware executor
+brain.feedback(success=False)    # outcome -> memory (changes next decision)
+brain.learn()                    # outcome -> policy weights
+```
+
+Attach it to the live pipeline instead:
+
+```bash
+python -m orcvision run --source video.mp4 --model yolov8n --track --depth \
+    --brain --goal avoid_collision --explain
+```
+
+Each event then carries a `decision` field alongside `alerts` (existing
+consumers, including the microcontroller sketches, are unaffected).
+
+### Model-agnostic by construction
+
+The brain never imports a detector. Any perception source works:
+
+```python
+from orcvision.brain import from_records
+scene = from_records(
+    [{"label": "obstacle", "confidence": 0.9, "bbox": (0.4, 0.4, 0.6, 0.6)}],
+    timestamp=t, normalized=True,      # embedded pipelines often skip pixels
+)
+```
+
+Pixel coordinates are normalized to 0..1, so a policy trained at 640×480
+still works at 1920×1080 or on a 96×96 microcontroller camera.
+
+### Layers (each independently replaceable)
+
+| Module | Role |
+|--------|------|
+| `brain/adapters.py` | any vision output → normalized `SceneState` |
+| `brain/state.py` | `ObjectState` / `SceneState` / `WorldState` |
+| `brain/temporal.py` | appeared / moved / approaching / stopped / disappeared |
+| `brain/memory.py` | bounded working memory + decaying long-term memory |
+| `brain/decision.py` | feature extraction → utility scoring → explained choice |
+| `brain/policy.py` | trainable `LinearPolicy` (imitation + reward) |
+| `brain/constraints.py` | deterministic safety floor under the learned policy |
+| `brain/actions.py` | generic `Action` vocabulary, no hardware coupling |
+| `brain/feedback.py` | outcome → memory + policy update |
+
+Swap the decision engine without touching memory; swap memory without
+touching perception. Pass your own via the `VisionBrain(...)` constructor.
+
+### Trainable, not a black box
+
+The policy is a linear model over named features — small enough for a
+microcontroller, and every decision decomposes into readable terms:
+
+```python
+brain.policy.fit(dataset, epochs=10)     # imitation / supervised
+brain.policy.reinforce(action, feats, reward)  # RL-compatible
+brain.save("~/.cache/orcvision/brain")   # weights + memory persist
+```
+
+### Safety: learning cannot override the floor
+
+A learned policy driving actuators has a real failure mode — if every
+action accumulates failures, scores sink and something unsafe can float to
+the top. So the brain is a **hybrid**: the trainable policy proposes,
+deterministic constraints dispose. A constraint can veto an action outright
+no matter how attractive the policy finds it, and if everything is vetoed
+the brain falls back to `STOP` rather than the least-bad forbidden action.
+
+```
+MOVE forbidden: obstacle at 0.40 m in center (proximity 0.92 >= 0.60)
+```
+
+Constraints are plain, auditable Python with no weights — nothing that
+drifts with training.
+
 ## Sinks
 
 | `--sink` | Output |
@@ -241,12 +358,20 @@ python -m orcvision train --data data.yaml --model yolov8n --epochs 10
 python -m orcvision test  --weights runs/detect/train/weights/best.pt --data data.yaml
 ```
 
-## Roadmap (v0.2)
+## Roadmap
+
+**Landed in v0.2 (the brain layer):** internal state + world model, temporal
+reasoning, working/long-term memory, explainable utility decisions, generic
+action abstraction, feedback loop, trainable policy, safety constraints.
+
+**Next:**
 
 - ROS 2 bridge (`orcvision-ros`)
 - Real thermal / stereo sensor implementations
-- Raspberry Pi 5 / Jetson verification
-- Learned decision layer (optional, alongside rules)
+- Raspberry Pi 5 / Jetson verification of the brain loop
+- Richer decision engines behind the same protocol (decision tree, tiny MLP,
+  full RL policy)
+- Multi-goal arbitration and goal stacks
 
 ## License
 

@@ -1,4 +1,17 @@
-# Orc-Vison — v0.1 Specification
+# Orc-Vison — Specification
+
+> **v0.2 note — scope change.** v0.1 was perception-only and listed
+> "Learned/ML-based decision-making" as a non-goal. v0.2 deliberately
+> reverses that: the project's direction is now *"don't build another vision
+> model — build the brain that turns vision into autonomous decisions."*
+> The `orcvision.brain` package adds state, memory, temporal reasoning,
+> decisions, feedback and a trainable policy above perception.
+>
+> The v0.1 sections below still describe the perception half, which is
+> unchanged and remains usable on its own. Non-goals that stay non-goals:
+> ROS 2, non-visual sensor fusion, multi-camera fusion, SLAM/navigation/
+> motion planning, Docker, labeling tools, model-zoo hosting,
+> TensorRT-specific paths. See "v0.2 — the brain layer" at the end.
 
 ## What this is
 A lightweight Python CLI + library that turns vision sensors into a
@@ -115,3 +128,70 @@ servers/CI.
   microcontroller, verified, usable right now to test the full
   pipeline without hardware
 ```
+
+---
+
+# v0.2 — the brain layer (`orcvision.brain`)
+
+## Guiding principle
+"Don't build another vision model. Build the brain that turns vision into
+autonomous decisions."
+
+## What it is
+A lightweight, modular, trainable decision layer *above* perception:
+
+    Perception → State → Memory → Decision → Action → Feedback → (loop)
+
+## Architectural principles (binding)
+- **Model-agnostic.** The brain must never import a detector. YOLO is one
+  possible perception source among many (OpenCV, custom CNNs, trackers,
+  depth cameras, segmentation, optical flow, embedded vision). All input
+  arrives through `brain/adapters.py`.
+- **Edge-first.** Core brain is pure standard library — no numpy, torch,
+  transformers, cloud APIs, LLMs or network access. It must run offline.
+- **Bounded footprint.** Both memory stores are hard-capped so an
+  indefinitely long run has flat memory use.
+- **Resolution-independent.** All positions normalized to 0..1 fractions so
+  a policy is portable across cameras and resolutions.
+- **Modular.** Each layer independently replaceable via a Protocol:
+  `PerceptionAdapter`, `DecisionEngine`, `Policy`, `Constraint`,
+  `ActionExecutor`.
+- **Explainable.** Every decision decomposes into named, weighted terms.
+- **Hardware-agnostic actions.** The brain emits `Action(type, parameters)`;
+  actuator code lives outside it.
+
+## Safety requirement (binding)
+The trainable policy is **not** the final authority. Deterministic
+constraints (`brain/constraints.py`) are evaluated after scoring and may
+veto any action regardless of its score. If every candidate is vetoed the
+brain takes its configured safe action (default `STOP`), never the
+least-bad forbidden one. Constraints carry no learned weights and must not
+drift with training. Rationale: a policy that learns from outcomes can
+otherwise let an unsafe action float to the top once every option has
+accumulated failures.
+
+## Memory requirements
+- Working memory: bounded ring buffer + retention window.
+- Long-term memory: keyed traces with importance, reinforcement,
+  exponential decay, retrieval, deduplication, capacity eviction.
+- Not a database of every observation — useful memory only.
+
+## Trainability
+Training targets **decision-making, not perception**. Supported now:
+supervised/imitation learning (`Policy.fit`, `learn_from_example`) and
+reward-based updates (`Policy.reinforce`, RL-compatible). The architecture
+must allow progressively replacing the linear policy with richer trainable
+models behind the same `Policy`/`DecisionEngine` protocols.
+
+## V1 acceptance criterion
+The brain must demonstrably produce a **different action from identical
+perception input** after feedback that the first action failed — proving
+the loop closes through memory. Demonstrated by
+`examples/autonomous_brain/demo.py` and enforced by
+`tests/test_brain_loop.py::test_memory_changes_the_decision`.
+
+## Non-goals for the brain layer (v0.2)
+- Artificial general intelligence; this is basic autonomous intelligence.
+- LLM or cloud-model dependence of any kind in the core.
+- Replacing the deterministic rule engine — the brain runs *alongside* it.
+- Planning, SLAM, navigation, or multi-step trajectory optimization.

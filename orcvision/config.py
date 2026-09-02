@@ -45,6 +45,22 @@ class DecisionConfig:
 
 
 @dataclass
+class BrainConfigSection:
+    """Autonomous brain layer (orcvision.brain). Disabled by default."""
+
+    enabled: bool = False
+    goal: str = "idle"
+    actions: list[str] = field(default_factory=list)  # empty -> brain defaults
+    hazard_labels: list[str] = field(default_factory=lambda: ["person", "obstacle", "vehicle"])
+    target_labels: list[str] = field(default_factory=list)
+    max_range_m: float = 5.0
+    safe_action: str = "STOP"
+    # Persisted policy weights + long-term memory directory (optional).
+    state_dir: str | None = None
+    explain: bool = False
+
+
+@dataclass
 class SinkConfig:
     type: str = "stdout"  # stdout | mqtt | file
     # mqtt
@@ -62,6 +78,7 @@ class RunConfig:
     tracker: TrackerConfig = field(default_factory=TrackerConfig)
     depth: DepthConfig = field(default_factory=DepthConfig)
     decision: DecisionConfig = field(default_factory=DecisionConfig)
+    brain: BrainConfigSection = field(default_factory=BrainConfigSection)
     sink: SinkConfig = field(default_factory=SinkConfig)
 
 
@@ -77,5 +94,6 @@ def load_config(path: str | Path) -> RunConfig:
         tracker=TrackerConfig(**(data.get("tracker") or {})),
         depth=DepthConfig(**(data.get("depth") or {})),
         decision=DecisionConfig(**(data.get("decision") or {})),
+        brain=BrainConfigSection(**(data.get("brain") or {})),
         sink=SinkConfig(**(data.get("sink") or {})),
     )

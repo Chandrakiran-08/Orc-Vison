@@ -1,0 +1,44 @@
+# Obstacle avoidance with the autonomous brain enabled.
+#
+#   python -m orcvision run --config examples/autonomous_brain/config.yaml
+#
+# The perception half is unchanged from any other config; the `brain:`
+# section is what adds state, memory, decisions and feedback on top.
+sensor:
+  type: rgb
+  source: 0            # webcam; or a file path / rtsp:// URL
+
+model:
+  name: yolov8n
+  confidence: 0.35
+
+tracker:
+  enabled: true        # stable track_ids give the brain object identity
+
+depth:
+  enabled: true        # metric-ish depth makes proximity reasoning far better
+
+# Deterministic rules still run, and still populate `alerts`. The brain runs
+# after them and populates `decision`. Neither replaces the other.
+decision:
+  event_rules:
+    - when: "min_depth('obstacle') < 1.5"
+      message: "Obstacle within 1.5 m"
+      severity: "critical"
+
+brain:
+  enabled: true
+  goal: avoid_collision
+  # Objects the brain treats as hazards to reason about.
+  hazard_labels: ["person", "obstacle", "vehicle", "car"]
+  # Objects worth following/tracking (empty = none).
+  target_labels: []
+  max_range_m: 5.0
+  # Taken when every candidate action is vetoed by a safety constraint.
+  safe_action: "STOP"
+  # Persist learned weights + long-term memory across power cycles.
+  state_dir: "~/.cache/orcvision/brain"
+  explain: false       # true prints the reasoning for every decision to stderr
+
+sink:
+  type: stdout

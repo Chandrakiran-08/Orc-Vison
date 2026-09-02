@@ -79,8 +79,20 @@ def run(
     display: bool = typer.Option(
         False, "--display", help="Show a local preview window with boxes/labels (needs a GUI)"
     ),
+    brain: bool = typer.Option(
+        False, "--brain", help="Enable the autonomous decision brain (state/memory/action)"
+    ),
+    goal: str = typer.Option("idle", "--goal", help="Brain goal, e.g. avoid_collision"),
+    explain: bool = typer.Option(
+        False, "--explain", help="Print why the brain chose each action (implies --brain)"
+    ),
 ):
-    """Run the perception pipeline: sensor -> model -> tracker -> decision -> sink."""
+    """Run the perception pipeline: sensor -> model -> tracker -> decision -> sink.
+
+    With ``--brain`` the pipeline additionally runs the autonomous brain
+    (perception -> state -> memory -> decision -> action), attaching the
+    chosen action to each event's ``decision`` field.
+    """
     from orcvision.config import RunConfig, SinkConfig, load_config
     from orcvision.decision.rules import RuleEngine
     from orcvision.events import PerceptionEvent
@@ -100,6 +112,7 @@ def run(
         sink_type = cfg.sink.type
         sink_cfg = cfg.sink
         rules = RuleEngine.from_config(cfg.decision.rules, cfg.decision.event_rules)
+        brain_cfg = cfg.brain
     else:
         src = _coerce_source(source)
         width = height = None
@@ -107,6 +120,9 @@ def run(
         sink_type = sink
         sink_cfg = SinkConfig(type=sink)
         rules = RuleEngine()
+        from orcvision.config import BrainConfigSection
+
+        brain_cfg = BrainConfigSection(enabled=brain or explain, goal=goal, explain=explain)
 
     sensor = _build_sensor(sensor_type, src, width, height)
     detector = resolve_model(model_name, weights=weights, confidence=confidence, track=track)
@@ -128,6 +144,26 @@ def run(
         from orcvision.models.depth import DepthEstimator
 
         depth_estimator = DepthEstimator()
+
+    # Optional autonomous brain. Built only when asked for, so the plain
+    # perception pipeline keeps its current cost and behaviour.
+    vision_brain = None
+    if brain_cfg.enabled or brain or explain:
+        from orcvision.brain import BrainConfig, VisionBrain
+
+        bc = BrainConfig(
+            goal=brain_cfg.goal if config is not None else goal,
+            hazard_labels=frozenset(brain_cfg.hazard_labels),
+            target_labels=frozenset(brain_cfg.target_labels),
+            max_range_m=brain_cfg.max_range_m,
+            safe_action=brain_cfg.safe_action,
+        )
+        if brain_cfg.actions:
+            bc.actions = tuple(brain_cfg.actions)
+        vision_brain = VisionBrain(bc)
+        if brain_cfg.state_dir:
+            brain_state_dir = Path(brain_cfg.state_dir).expanduser()
+            vision_brain.load(brain_state_dir)
 
     out = _build_sink(sink_type, sink_cfg)
     source_name = _source_name(sensor, f"{sensor_type}:{src}")
@@ -168,6 +204,15 @@ def run(
                 detections=detections,
             )
             rules.apply(event)
+
+            # Brain runs after the deterministic rules, consuming the same
+            # event: perception -> state -> memory -> decision -> action.
+            if vision_brain is not None:
+                decision = vision_brain.step(event, execute=True)
+                event.decision = decision.to_dict()
+                if brain_cfg.explain or explain:
+                    typer.echo(decision.explain(), err=True)
+
             out.emit(event)
 
             if display:
@@ -193,6 +238,10 @@ def run(
     except KeyboardInterrupt:  # pragma: no cover - interactive
         typer.echo("Interrupted, shutting down.", err=True)
     finally:
+        # Persist learned weights + long-term memory so the brain resumes
+        # with its experience after a power cycle.
+        if vision_brain is not None and brain_cfg.state_dir:
+            vision_brain.save(Path(brain_cfg.state_dir).expanduser())
         sensor.release()
         out.close()
         if hasattr(detector, "release"):
