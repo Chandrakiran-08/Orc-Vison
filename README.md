@@ -288,14 +288,49 @@ touching perception. Pass your own via the `VisionBrain(...)` constructor.
 
 ### Trainable, not a black box
 
-The policy is a linear model over named features — small enough for a
-microcontroller, and every decision decomposes into readable terms:
+The policy is a linear model over named features — a trained policy is a few
+dozen floats — and every decision decomposes into readable terms:
 
 ```python
 brain.policy.fit(dataset, epochs=10)     # imitation / supervised
 brain.policy.reinforce(action, feats, reward)  # RL-compatible
 brain.save("~/.cache/orcvision/brain")   # weights + memory persist
 ```
+
+### Where it runs (honest version)
+
+The two halves have very different requirements, and neither runs on a
+bare microcontroller today.
+
+| Half | Needs | Runs on |
+|------|-------|---------|
+| Perception (`sensor → model → tracker`) | CPython + OpenCV + ONNX/Ultralytics | Linux SBC or PC. **No MCU.** |
+| Brain (`orcvision.brain`) | CPython 3.11+, stdlib only | Any Linux board with CPython, incl. Pi Zero 2 W |
+| Actuation | C++ / MicroPython | Uno R4, ESP32, Pico W — as MQTT/serial endpoints |
+
+**Verified-capable of the brain layer:** anything running CPython 3.11+ —
+Raspberry Pi Zero 2 W / 3 / 4 / 5, Jetson Nano/Orin, Radxa, Orange Pi, x86
+mini-PCs. The brain's live heap is ~40 KB after 300 full decide/feedback
+cycles, so it is never the bottleneck; the *detector* decides what board
+you need.
+
+**Not capable of running the brain as written:** ESP32, RP2040 / Pico W,
+Arduino Uno R4, STM32, nRF52, Teensy. These have no CPython. The brain uses
+`dataclasses`, `typing`, `from __future__` and `pathlib`, none of which
+exist in MicroPython or CircuitPython.
+
+The intended edge topology keeps the MCU on the actuator side, which is
+what the existing firmware examples already do:
+
+```
+camera ─▶ SBC (perception + brain) ─MQTT/serial─▶ MCU ─▶ motors/relay/servo
+```
+
+**Could the brain be ported to MicroPython?** Plausibly — the algorithms
+are dicts, floats and `math.exp`, and ~40 KB fits an ESP32's 520 KB RAM.
+It would need `dataclasses` → plain classes, `typing`/`__future__` removed,
+`pathlib` → `open()`, and a MicroPython-compatible `deque`. That port does
+not exist yet; nothing in this repo should be read as claiming it does.
 
 ### Safety: learning cannot override the floor
 

@@ -6,8 +6,9 @@ Scoring is linear::
 
 That choice is not a placeholder, it is the point:
 
-* **Lightweight.** A dict of floats. No torch, no numpy, no matrix ops — it
-  runs on a microcontroller and trains on a laptop.
+* **Lightweight.** A dict of floats. No torch, no numpy, no matrix ops — a
+  trained policy is a few dozen numbers you can print. (It needs CPython to
+  run today; see "Where it runs" in the README for the MCU story.)
 * **Explainable.** Every term is a named contribution, so "why did you
   stop?" is answered by sorting the terms, not by interpreting a black box.
 * **Trainable.** A linear model has a well-defined gradient, so the same
