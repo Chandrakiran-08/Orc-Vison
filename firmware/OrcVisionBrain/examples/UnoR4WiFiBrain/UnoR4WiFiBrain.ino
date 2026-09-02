@@ -54,6 +54,16 @@
 #include <OrcVisionBrain.h>
 #include <WiFiS3.h>
 
+// ArduinoJson 6 and 7 spell the fixed-capacity document differently, and 7
+// removed StaticJsonDocument entirely. Support both rather than silently
+// failing to compile for whichever one the Library Manager installed.
+#if ARDUINOJSON_VERSION_MAJOR >= 7
+typedef JsonDocument OvJsonDoc;
+#define OV_MAKE_JSON_DOC(name, cap) OvJsonDoc name
+#else
+#define OV_MAKE_JSON_DOC(name, cap) StaticJsonDocument<cap> name
+#endif
+
 // ---------------------------------------------------------------------------
 // User configuration
 // ---------------------------------------------------------------------------
@@ -144,7 +154,19 @@ void handleEvent(const JsonDocument& doc) {
   // Frame dimensions let us accept pixel bboxes; normalized input also works.
   uint16_t h = doc["frame_shape"][0] | 0;
   uint16_t w = doc["frame_shape"][1] | 0;
-  float ts = doc["timestamp"] | (float)(millis() / 1000.0f);
+
+  // Time base: the board's own clock, NOT the host's timestamp.
+  //
+  // The host sends a Unix epoch (~1.79e9). float32 has 24 bits of mantissa,
+  // so representable values up there are ~128 seconds apart: every
+  // frame-to-frame delta rounds to zero and dt collapses onto the library's
+  // minimum-dt clamp. Measured effect on a 4-frame approach — approach_rate
+  // reads 8e5 m/s instead of 1.6, and memory decay quantises into 128 s
+  // steps. Motion *classification* happens to survive (a huge rate still
+  // exceeds the threshold), so this fails quietly rather than obviously.
+  // millis()/1000 is small, monotonic and millisecond-exact, which is all
+  // the temporal reasoning needs.
+  float ts = (float)millis() / 1000.0f;
 
   brain.beginFrame(ts);
   JsonArrayConst dets = doc["detections"];
@@ -154,17 +176,19 @@ void handleEvent(const JsonDocument& doc) {
     JsonArrayConst bbox = det["bbox"];
     if (bbox.size() < 4) continue;
     // depth_m is null when the host has no depth; map that to the sentinel.
-    float depth = det["depth_m"].isNull() ? OV_UNKNOWN_DEPTH : (float)det["depth_m"];
-    int16_t track = det["track_id"].isNull() ? -1 : (int16_t)det["track_id"];
+    float depth =
+        det["depth_m"].isNull() ? OV_UNKNOWN_DEPTH : det["depth_m"].as<float>();
+    int16_t track =
+        det["track_id"].isNull() ? (int16_t)-1 : (int16_t)det["track_id"].as<int>();
 
     if (w > 0 && h > 0) {
-      brain.observePixels(label, conf, bbox[0], bbox[1], bbox[2], bbox[3], w, h, depth,
-                          track);
+      brain.observePixels(label, conf, bbox[0].as<float>(), bbox[1].as<float>(),
+                          bbox[2].as<float>(), bbox[3].as<float>(), w, h, depth, track);
     } else {
-      float cx = ((float)bbox[0] + (float)bbox[2]) * 0.5f;
-      float cy = ((float)bbox[1] + (float)bbox[3]) * 0.5f;
-      float size = ((float)bbox[2] - (float)bbox[0]) * ((float)bbox[3] - (float)bbox[1]);
-      brain.observe(label, conf, cx, cy, size, depth, track);
+      float x1 = bbox[0].as<float>(), y1 = bbox[1].as<float>();
+      float x2 = bbox[2].as<float>(), y2 = bbox[3].as<float>();
+      brain.observe(label, conf, (x1 + x2) * 0.5f, (y1 + y2) * 0.5f,
+                    (x2 - x1) * (y2 - y1), depth, track);
     }
   }
   brain.endFrame();
@@ -194,7 +218,7 @@ void onMqttMessage(int messageSize) {
   (void)messageSize;
   String topic = mqttClient.messageTopic();
 
-  StaticJsonDocument<JSON_CAPACITY> doc;
+  OV_MAKE_JSON_DOC(doc, JSON_CAPACITY);
   DeserializationError err = deserializeJson(doc, mqttClient);
   if (err) {
     Serial.print("JSON parse failed: ");
@@ -238,7 +262,9 @@ void loop() {
   if (!mqttClient.connected()) connectMqtt();
   mqttClient.poll();
 
-  if (actUntil != 0 && millis() > actUntil) {
+  // Rollover-safe: millis() wraps after ~49 days, so compare a signed
+  // difference rather than the raw values.
+  if (actUntil != 0 && (long)(millis() - actUntil) >= 0) {
     digitalWrite(ALERT_PIN, LOW);
     actUntil = 0;
   }

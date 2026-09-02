@@ -373,3 +373,50 @@ def test_corrupt_memory_file_does_not_crash_the_brain(tmp_path):
     brain.observe([{"label": "obstacle", "confidence": 0.9, "bbox": (0.4, 0.4, 0.6, 0.6)}])
     assert brain.decide().action.type  # still operable
     assert len(brain.memory.longterm) == 1  # malformed entries dropped
+
+
+@pytest.mark.skipif(shutil.which("g++") is None, reason="no C++ compiler available")
+def test_epoch_timestamps_corrupt_motion_rates(tmp_path):
+    """Document, executably, why the sketch uses a local time base.
+
+    float32 spacing near a Unix epoch (~1.79e9) is about 128 s, so passing
+    epoch timestamps collapses dt and corrupts every derived rate. Motion
+    classification survives by luck, which is what makes this dangerous: it
+    degrades quietly. This pins the failure mode so nobody "simplifies" the
+    sketch back into using the host's timestamp.
+    """
+    probe = tmp_path / "epoch.cpp"
+    probe.write_text(
+        '#include "OrcVisionBrain.h"\n'
+        "#include <stdio.h>\n"
+        "static float rate(float t0, float step){\n"
+        "  OrcVisionBrain b; b.begin(); b.addHazardLabel(\"obstacle\");\n"
+        "  float depths[4] = {4.0f,3.0f,2.0f,1.2f};\n"
+        "  for (int i=0;i<4;i++){\n"
+        "    b.beginFrame(t0 + (float)i*step);\n"
+        "    b.observe(\"obstacle\",0.9f,0.5f,0.5f,0.05f,depths[i],1);\n"
+        "    b.endFrame();\n"
+        "  }\n"
+        "  const OvObject* o = b.objectAt(0);\n"
+        "  return o ? o->approach_rate : 0.0f;\n"
+        "}\n"
+        "int main(){ printf(\"%.6g %.6g\\n\", rate(12.0f,0.5f), rate(1788240924.0f,0.5f));\n"
+        "  return 0; }\n",
+        encoding="utf-8",
+    )
+    binary = tmp_path / "epoch"
+    subprocess.run(
+        ["g++", "-std=c++11", "-O2", "-I", str(CPP_DIR / "src"), str(probe), "-o", str(binary)],
+        check=True,
+        capture_output=True,
+    )
+    out = subprocess.run([str(binary)], capture_output=True, text=True).stdout.split()
+    local_rate, epoch_rate = float(out[0]), float(out[1])
+
+    # A sane time base recovers the true closing speed (0.8 m per 0.5 s).
+    assert 1.0 < local_rate < 3.0, f"local time base gave {local_rate} m/s"
+    # An epoch time base produces physically absurd kinematics.
+    assert epoch_rate > 1000.0, (
+        f"epoch time base gave {epoch_rate} m/s — if float32 behaviour changed, "
+        "revisit the time-base comments in the sketch and header"
+    )

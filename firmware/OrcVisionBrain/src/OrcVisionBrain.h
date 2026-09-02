@@ -281,6 +281,15 @@ class OrcVisionBrain {
   // --- perception ---------------------------------------------------------
 
   // Begin a frame. Call observe*() for each detection, then endFrame().
+  //
+  // IMPORTANT — `timestamp` must be a SMALL monotonic value in seconds, such
+  // as millis()/1000.0f. Do NOT pass a Unix epoch: float32 carries 24 bits of
+  // mantissa, so near 1.79e9 representable values are ~128 seconds apart.
+  // Frame-to-frame deltas round to zero, dt collapses onto the minimum-dt
+  // clamp below, and every derived rate becomes meaningless — a measured
+  // 1.6 m/s approach reads as 8e5 m/s, and memory decay quantises into 128 s
+  // steps. Motion classification survives by luck, so this degrades quietly
+  // instead of failing loudly. Keep the magnitude small.
   void beginFrame(float timestamp) {
     now_ = timestamp;
     any_approach_ = false;
