@@ -99,7 +99,7 @@ def run(
         depth = cfg.depth.enabled
         sink_type = cfg.sink.type
         sink_cfg = cfg.sink
-        rules = RuleEngine.from_config(cfg.decision.rules)
+        rules = RuleEngine.from_config(cfg.decision.rules, cfg.decision.event_rules)
     else:
         src = _coerce_source(source)
         width = height = None

@@ -155,17 +155,46 @@ arbitrary code**.
 
 ```yaml
 decision:
+  # Per-detection rules: evaluated once per detected object.
   rules:
     - when: "label == 'person' and confidence > 0.8"
       action: "alert"
+      message: "Confident person detected"   # optional custom text
+      severity: "warning"                     # optional; prefixes the alert
       cooldown_s: 30
     - when: "label == 'person' and track_id is not None"
       action: "alert"
       min_consecutive_frames: 5
+  # Event-scope rules: evaluated once per frame over ALL detections.
+  event_rules:
+    - when: "count('person') >= 3"
+      message: "Crowd forming"
+      severity: "critical"
+    - when: "exists('person') and exists('vehicle')"
+      message: "Person near vehicle"
+    - when: "min_depth('obstacle') < 1.5"
+      message: "Obstacle within 1.5 m"
 ```
 
-Available fields: `label`, `confidence`, `bbox`, `track_id`, `depth_m`,
-`class_id`. Matched rules append to `PerceptionEvent.alerts`.
+**Per-detection fields:** `label`, `confidence`, `bbox`, `track_id`,
+`depth_m`, `class_id`.
+
+**Event-scope helpers** (frame-level "how many" / "is there both X and Y"
+decisions a single detection can't express):
+
+| Helper | Returns |
+|--------|---------|
+| `count(label=None)` | number of detections (optionally of one label) |
+| `exists(label)` | `True` if any detection has that label |
+| `max_conf(label=None)` | highest confidence, or `0.0` if none match |
+| `min_depth(label=None)` | nearest `depth_m`, or `null` if unknown |
+
+Both scopes support `cooldown_s`, `min_consecutive_frames`, and optional
+`name` / `message` / `severity`. Matched rules append to
+`PerceptionEvent.alerts` (formatted `[severity] name: message`, or the
+legacy `action: when` when none are set). The same safe AST evaluator backs
+both — event-scope expressions may only call the four helpers above; no
+other calls, attribute access, or arbitrary code is ever evaluated.
 
 ## Sinks
 

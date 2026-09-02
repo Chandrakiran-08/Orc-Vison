@@ -41,6 +41,7 @@ class DepthConfig:
 @dataclass
 class DecisionConfig:
     rules: list[dict[str, Any]] = field(default_factory=list)
+    event_rules: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
