@@ -16,7 +16,7 @@ host (camera + model) ──MQTT/serial──▶ MCU (brain) ──▶ motors / 
 
 | Board | RAM | Port | Status |
 |-------|-----|------|--------|
-| **Arduino Uno R4 WiFi** (RA4M1) | 32 KB | `OrcVisionBrain/` (C++) | Logic verified on host; **not flash-tested** |
+| **Arduino Uno R4 WiFi** (RA4M1) | 32 KB | `OrcVisionBrain/` (C++) | ✅ **Verified on hardware** — self test passes on-device |
 | ESP32 / S3 / C3 | 320–520 KB | `OrcVisionBrain/` (C++) or `micropython/` | Logic verified on host; **not flash-tested** |
 | Raspberry Pi Pico W (RP2040) | 264 KB | `micropython/` (or C++ via Arduino core) | Logic verified on host; **not flash-tested** |
 | STM32 / nRF52 / Teensy | varies | `OrcVisionBrain/` (C++) | Logic verified on host; **not flash-tested** |
@@ -76,12 +76,41 @@ that avoiding failed.
 | Compiles clean for host with `-Wall -Wextra -Werror` | **Verified** |
 | No heap allocation / no STL | **Verified** (test-enforced) |
 | Fits in Uno R4 SRAM | **Verified** (measured, test-enforced < 4 KB) |
-| Runs correctly on real Uno R4 / ESP32 / Pico W hardware | **NOT verified** — no maintainer has flashed it |
-| Cross-compiles with the Arduino toolchain | **NOT verified** — no `arduino-cli` in the dev environment |
+| Cross-compiles with the Arduino toolchain | **Verified** — arduino-cli 1.5.1, core `arduino:renesas_uno` |
+| `BrainSelfTest.ino` runs correctly on a real Uno R4 WiFi | **Verified** — 5/5 on-device, 2026-09-03 |
+| `UnoR4WiFiBrain.ino` (WiFi + MQTT + JSON) on hardware | **NOT verified** — a different library surface |
+| ESP32 / Pico W / STM32 hardware | **NOT verified** — no maintainer has flashed those |
+| MicroPython port on a real board | **NOT verified** |
 
-The firmware is written carefully and its logic is tested, but nobody has
-put it on a board. Treat on-device behaviour as unproven until you confirm
-it yourself, and keep the actuator harmless (onboard LED) on first run.
+### What the hardware run actually proved
+
+Flashed to an Arduino Uno R4 WiFi on 2026-09-03:
+
+```
+Sketch uses 60124 bytes (22%) of program storage. Maximum is 262144 bytes.
+Global variables use 8036 bytes (24%) of dynamic memory,
+leaving 24732 bytes for local variables. Maximum is 32768 bytes.
+
+Brain footprint: 1284 bytes of SRAM
+  [PASS] object tracked across frames
+  [PASS] motion detected as APPROACHING
+  [PASS] fresh situation -> AVOID
+  [PASS] remembered failure -> STOP instead of AVOID
+  [PASS] MOVE refused with a hazard at 0.4 m
+ SELF TEST: PASS (5/5)
+```
+
+The decisions are byte-identical to the Python reference, so the
+golden-vector parity holds across the toolchain boundary — the same brain,
+the same choices, on a 48 MHz microcontroller.
+
+Note the memory line: the brain is 1284 B of the 8036 B of globals; the rest
+is the Arduino core and serial buffers. There is 24 KB of headroom for the
+WiFi stack and JSON parsing on top.
+
+The `UnoR4WiFiBrain.ino` sketch is still unproven on hardware — it pulls in
+WiFiS3, ArduinoMqttClient and ArduinoJson, none of which the self test
+exercises. Keep the actuator harmless (onboard LED) on its first run.
 
 ## Security posture — read before wiring an actuator
 
@@ -119,13 +148,30 @@ not pretend otherwise.
 
 ## Quick start — Arduino (Uno R4 WiFi, ESP32, ...)
 
-1. Copy `firmware/OrcVisionBrain/` into your Arduino `libraries/` folder
-   (or zip it and use *Sketch → Include Library → Add .ZIP Library*).
-2. Open `examples/UnoR4WiFiBrain/UnoR4WiFiBrain.ino`.
-3. Install `ArduinoMqttClient` and `ArduinoJson` (v6+); `WiFiS3` ships with
-   the UNO R4 board package.
-4. Edit the WiFi/broker constants, select *Arduino UNO R4 WiFi*, upload.
-5. On the host:
+Scripted, using arduino-cli. Note that the Arduino IDE packaged in most
+distro repositories is 1.8.x, which does **not** support the Uno R4 — use
+this script, or install IDE 2.x from arduino.cc.
+
+```bash
+./firmware/flash_uno_r4.sh check      # install arduino-cli + the board core
+./firmware/flash_uno_r4.sh compile    # build the self test — no board needed
+./firmware/flash_uno_r4.sh upload     # flash it and open the serial monitor
+```
+
+Run the self test first: it needs no libraries and no network, so a failure
+points at the brain or the toolchain rather than at WiFi. A good run ends
+with `SELF TEST: PASS (5/5)` and a fast-blinking onboard LED.
+
+Then the networked sketch:
+
+```bash
+./firmware/flash_uno_r4.sh upload wifi
+```
+
+Before that one, edit the WiFi/broker constants at the top of
+`examples/UnoR4WiFiBrain/UnoR4WiFiBrain.ino`. It needs `ArduinoMqttClient`
+and `ArduinoJson` (the script installs both); `WiFiS3` ships with the board
+core. Then, on the host:
 
 ```bash
 python -m orcvision run --source video.mp4 --model yolov8n \

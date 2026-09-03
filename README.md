@@ -89,10 +89,11 @@ Each frame prints one `PerceptionEvent` as JSON:
   pipeline without hardware
 
 **Microcontroller brain ports (`firmware/`):**
-- C++ (`OrcVisionBrain`) and MicroPython ports of the decision layer —
-  decision logic verified against the Python reference by a golden-vector
-  parity test, footprint measured (1284 B on the Uno R4 preset), **not
-  flash-tested on hardware**
+- Arduino Uno R4 WiFi — **verified on hardware**: the C++ brain compiles
+  with arduino-cli and its on-device self test passes 5/5, using 1284 B of
+  SRAM and making decisions byte-identical to the Python reference
+- The networked sketch (WiFi + MQTT), ESP32, Pico W and the MicroPython
+  port are **not flash-tested**
 
 ## Sensor support
 
@@ -334,11 +335,12 @@ test (`tests/test_firmware_parity.py`): 13 decisions across 8 scenarios,
 including the `AVOID → STOP` memory flip. The C++ builds clean under
 `-Wall -Wextra -Werror` with no heap allocation, no STL and no `String`.
 
-**Honest status:** the firmware's *logic* is verified against the Python
-reference on the host, and its footprint is measured. It has **not** been
-flash-tested on physical hardware, and the Arduino toolchain cross-compile
-is unverified. See [`firmware/README.md`](firmware/README.md) for the full
-status table before trusting it near an actuator.
+**Status:** the C++ brain is **verified on a real Arduino Uno R4 WiFi** —
+it cross-compiles with arduino-cli and its on-device self test passes 5/5,
+making the same decisions as the Python reference. The *networked* sketch
+(WiFi + MQTT + JSON) and the other boards are still unproven on hardware.
+See [`firmware/README.md`](firmware/README.md) for the full status table
+before trusting it near an actuator.
 
 ### Built for UAVs and industrial automation
 

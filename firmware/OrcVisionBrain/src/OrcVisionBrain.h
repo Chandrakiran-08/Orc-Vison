@@ -28,9 +28,11 @@
  *   OV_MAX_TRACES   long-term memories     (default 12)
  *
  * Verification status: the decision logic is verified against the Python
- * implementation by a golden-vector parity test (see tests/). It has NOT been
- * flash-tested on physical hardware by the maintainers — treat on-device
- * behaviour as unverified until you confirm it on your own board.
+ * implementation by a golden-vector parity test (see tests/), and the library
+ * is verified on real hardware — an Arduino Uno R4 WiFi runs the bundled
+ * BrainSelfTest example 5/5 on-device, using 1284 bytes of SRAM and making
+ * decisions byte-identical to the Python reference. Other boards (ESP32,
+ * Pico W, STM32) are untested; confirm on your own before trusting them.
  *
  * License: Apache-2.0, same as the rest of Orc-Vison.
  */

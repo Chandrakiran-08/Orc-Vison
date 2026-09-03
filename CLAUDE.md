@@ -46,7 +46,7 @@ Break these and the project stops being what it is:
    Test-enforced.
 6. **Honesty about verification.** README and `firmware/README.md` carry
    status tables saying what is and is not tested. Never upgrade a claim
-   without doing the work. Firmware has never been flash-tested.
+   without doing the work.
 
 ## Commands
 
@@ -78,10 +78,11 @@ production mode, audit log, UAV and industrial presets.
 
 ## Known gaps — read before claiming otherwise
 
-1. **Nothing has ever been flashed to hardware.** The C++ logic is verified
-   on the host against the Python reference, and `BrainSelfTest.ino`
-   compiles and passes 5/5 against a stubbed Arduino API — but the Arduino
-   cross-compiler and real silicon are unproven.
+1. **Partly flashed.** `BrainSelfTest.ino` is verified on a real Arduino
+   Uno R4 WiFi (5/5 on-device, 1284 B SRAM, decisions identical to Python).
+   Still unproven on hardware: `UnoR4WiFiBrain.ino` (WiFiS3 /
+   ArduinoMqttClient / ArduinoJson are a different library surface), plus
+   ESP32, Pico W, STM32 and the MicroPython port.
 2. **The firmware ports lack the platform-safety layer.** No battery,
    staleness, interlock or geofence handling in C++/MicroPython. Parity
    tests still pass only because the golden scenarios do not exercise
