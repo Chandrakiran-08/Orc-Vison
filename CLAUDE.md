@@ -68,8 +68,10 @@ PYTHONPATH= pytest -q          # or PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q
 
 ## Current state
 
-Branch `claude/repo-capabilities-0yi9zx`, **not yet merged to `main`** — the
-GitHub landing page still shows the old perception-only project.
+Branch `claude/repo-capabilities-0yi9zx`, open as
+[PR #1](https://github.com/Chandrakiran-08/Orc-Vison/pull/1) and **not yet
+merged** — the GitHub landing page still shows the old perception-only
+project. Pushing to this branch updates that PR.
 
 Done: brain (state, temporal, memory, trainable policy, constraints,
 feedback), C++ and MicroPython ports with parity tests, `PlatformState`
