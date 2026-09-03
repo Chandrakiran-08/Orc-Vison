@@ -92,21 +92,68 @@ uint32_t framesSeen = 0;
 
 // ---------------------------------------------------------------------------
 void connectWiFi() {
-  Serial.print("Connecting to WiFi: ");
-  Serial.println(WIFI_SSID);
-  while (WiFi.begin(WIFI_SSID, WIFI_PASSWORD) != WL_CONNECTED) {
-    Serial.println("  ...retrying in 3s");
+  // Sanity-check the radio before blaming the network.
+  if (WiFi.status() == WL_NO_MODULE) {
+    Serial.println("FATAL: WiFi module not responding.");
+    while (true) delay(1000);
+  }
+  String fv = WiFi.firmwareVersion();
+  if (fv < WIFI_FIRMWARE_LATEST_VERSION) {
+    Serial.print("NOTE: WiFi firmware ");
+    Serial.print(fv);
+    Serial.print(" is older than ");
+    Serial.print(WIFI_FIRMWARE_LATEST_VERSION);
+    Serial.println(" — update via the UNO R4 firmware updater if WiFi misbehaves.");
+  }
+
+  // Call WiFi.begin() ONCE per attempt, then poll. Calling it inside the
+  // loop condition restarts the association on every iteration, so DHCP
+  // never completes and the board reports "connected" with IP 0.0.0.0 —
+  // associated to the AP but with no usable address.
+  for (int attempt = 1;; ++attempt) {
+    Serial.print("Connecting to WiFi: ");
+    Serial.println(WIFI_SSID);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+    unsigned long deadline = millis() + 20000UL;
+    while ((long)(millis() - deadline) < 0) {
+      // Associated is not enough: wait for a real DHCP lease.
+      if (WiFi.status() == WL_CONNECTED && (uint32_t)WiFi.localIP() != 0) {
+        Serial.print("\nWiFi connected, IP: ");
+        Serial.println(WiFi.localIP());
+        Serial.print("Gateway: ");
+        Serial.println(WiFi.gatewayIP());
+        return;
+      }
+      Serial.print('.');
+      delay(500);
+    }
+
+    Serial.print("\n  attempt ");
+    Serial.print(attempt);
+    Serial.print(" timed out (status=");
+    Serial.print(WiFi.status());
+    Serial.print(", ip=");
+    Serial.print(WiFi.localIP());
+    Serial.println("). Check the password, and that the AP is 2.4 GHz.");
+    WiFi.disconnect();
     delay(3000);
   }
-  Serial.print("WiFi connected, IP: ");
-  Serial.println(WiFi.localIP());
 }
 
 void connectMqtt() {
   mqttClient.setId(MQTT_CLIENTID);
+  Serial.print("Connecting to MQTT broker ");
+  Serial.print(MQTT_BROKER);
+  Serial.print(":");
+  Serial.println(MQTT_PORT);
   while (!mqttClient.connect(MQTT_BROKER, MQTT_PORT)) {
     Serial.print("  MQTT connect failed, error = ");
-    Serial.println(mqttClient.connectError());
+    Serial.print(mqttClient.connectError());
+    Serial.println("  (-2 = cannot reach the broker)");
+    Serial.println("  Check: broker IP correct? mosquitto listening on");
+    Serial.println("  0.0.0.0:1883, not 127.0.0.1? firewall open? Some phone");
+    Serial.println("  hotspots isolate clients, which blocks this entirely.");
     delay(3000);
   }
   Serial.println("MQTT connected.");
