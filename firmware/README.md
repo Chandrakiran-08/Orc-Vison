@@ -78,7 +78,8 @@ that avoiding failed.
 | Fits in Uno R4 SRAM | **Verified** (measured, test-enforced < 4 KB) |
 | Cross-compiles with the Arduino toolchain | **Verified** — arduino-cli 1.5.1, core `arduino:renesas_uno` |
 | `BrainSelfTest.ino` runs correctly on a real Uno R4 WiFi | **Verified** — 5/5 on-device, 2026-09-03 |
-| `UnoR4WiFiBrain.ino` (WiFi + MQTT + JSON) on hardware | **NOT verified** — a different library surface |
+| `UnoR4WiFiBrain.ino` cross-compiles for the Uno R4 | **Verified** — 79448 B flash (30%), 9108 B globals (27%) |
+| `UnoR4WiFiBrain.ino` *runs* on hardware | **NOT verified** — compiles, but never flashed |
 | ESP32 / Pico W / STM32 hardware | **NOT verified** — no maintainer has flashed those |
 | MicroPython port on a real board | **NOT verified** |
 
@@ -108,9 +109,18 @@ Note the memory line: the brain is 1284 B of the 8036 B of globals; the rest
 is the Arduino core and serial buffers. There is 24 KB of headroom for the
 WiFi stack and JSON parsing on top.
 
-The `UnoR4WiFiBrain.ino` sketch is still unproven on hardware — it pulls in
-WiFiS3, ArduinoMqttClient and ArduinoJson, none of which the self test
-exercises. Keep the actuator harmless (onboard LED) on its first run.
+The networked `UnoR4WiFiBrain.ino` also cross-compiles for the board
+(79448 B flash, 9108 B globals — the whole WiFi/MQTT/JSON stack adds only
+about 1 KB of statics over the self test), but has not been *run* on
+hardware. Keep the actuator harmless (onboard LED) on its first run.
+
+### ArduinoJson version
+
+Use **6.x**, which `flash_uno_r4.sh` pins. ArduinoJson 7 removed
+`StaticJsonDocument` and allocates its document from the heap; doing that
+inside an MQTT callback on a 32 KB board reintroduces exactly the
+fragmentation risk the rest of this firmware avoids. The sketch has a
+version guard so it compiles under either, but on the Uno R4 prefer 6.x.
 
 ## Security posture — read before wiring an actuator
 

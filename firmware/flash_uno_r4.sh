@@ -60,9 +60,19 @@ ensure_core() {
 
 ensure_libs() {
   [ "$NEEDS_LIBS" -eq 1 ] || return 0
-  say "Installing sketch libraries (ArduinoMqttClient, ArduinoJson)"
+  say "Installing sketch libraries (ArduinoMqttClient, ArduinoJson 6.x)"
   arduino-cli lib install "ArduinoMqttClient" >/dev/null
-  arduino-cli lib install "ArduinoJson" >/dev/null
+
+  # Pin ArduinoJson to 6.x deliberately. Version 7 removed
+  # StaticJsonDocument, and its JsonDocument allocates from the heap — a heap
+  # allocation inside an MQTT callback on a 32 KB board is the fragmentation
+  # risk this project avoids everywhere else. 6.x keeps the document in a
+  # fixed-size buffer. The sketch compiles under either (see the version
+  # guard at the top of it), but 6.x is the right one for this board.
+  if arduino-cli lib list 2>/dev/null | grep -qi "^ArduinoJson[[:space:]]\+7\."; then
+    warn "ArduinoJson 7.x is installed; downgrading to 6.x for a heap-free document"
+  fi
+  arduino-cli lib install "ArduinoJson@6.21.5" >/dev/null
 }
 
 find_port() {
