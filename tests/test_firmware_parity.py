@@ -435,3 +435,52 @@ def test_epoch_timestamps_corrupt_motion_rates(tmp_path):
         f"epoch time base gave {epoch_rate} m/s — if float32 behaviour changed, "
         "revisit the time-base comments in the sketch and header"
     )
+
+
+@pytest.mark.skipif(shutil.which("g++") is None, reason="no C++ compiler available")
+def test_on_device_self_test_sketch_passes(tmp_path):
+    """Compile and run the board self-test sketch against a stubbed Arduino API.
+
+    BrainSelfTest.ino is what a user flashes first: it exercises the whole
+    loop on-device with no networking, so a failure there points at the
+    brain or the toolchain rather than at WiFi. Running it here means the
+    sketch cannot rot between releases — the only thing this cannot cover
+    is the Arduino cross-compiler itself.
+    """
+    stub_dir = CPP_DIR / "tests" / "arduino_stub"
+    sketch_dir = CPP_DIR / "examples" / "BrainSelfTest"
+
+    main = tmp_path / "main.cpp"
+    main.write_text(
+        '#include "Arduino.h"\n'
+        f'#include "{sketch_dir / "BrainSelfTest.ino"}"\n'
+        "int main(){ setup(); return (checksPassed == checksRun) ? 0 : 1; }\n",
+        encoding="utf-8",
+    )
+    binary = tmp_path / "selftest"
+    compiled = subprocess.run(
+        [
+            "g++",
+            "-std=c++11",
+            "-O2",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-x",
+            "c++",
+            str(main),
+            "-I",
+            str(stub_dir),
+            "-I",
+            str(CPP_DIR / "src"),
+            "-o",
+            str(binary),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert compiled.returncode == 0, f"sketch does not compile:\n{compiled.stderr}"
+
+    run = subprocess.run([str(binary)], capture_output=True, text=True)
+    assert "SELF TEST: PASS (5/5)" in run.stdout, run.stdout
+    assert run.returncode == 0
