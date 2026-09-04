@@ -91,9 +91,13 @@ production mode, audit log, UAV and industrial presets.
    tests still pass only because the golden scenarios do not exercise
    `PlatformState`. This is a real divergence between the README and the
    board.
-3. **No real-camera run.** Everything has been driven by synthetic
-   detections. `disappear_after_misses`, `match_radius` and the proximity
-   thresholds are educated guesses that real footage will correct.
+3. **Real camera run once, tuning still first-pass.** The full stack has
+   run end to end on a real webcam (yolov8n -> tracker -> MQTT -> Uno R4
+   brain -> AVOID on a present person, 2026-09-03). What is NOT yet
+   validated is the *tuning*: `disappear_after_misses`, `match_radius` and
+   the proximity thresholds are still educated guesses. A steady AVOID on a
+   close person proves the loop, not that approach detection, track
+   dropping, or the thresholds behave well across real footage.
 4. **MQTT examples are unauthenticated plaintext.** Anyone on the network
    can forge detections or poison memory via feedback. Documented in
    `firmware/README.md`; fine on a bench, not beyond it.
