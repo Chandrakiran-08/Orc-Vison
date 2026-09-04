@@ -17,15 +17,27 @@ depth:
   enabled: false
 
 decision:
+  # Per-detection rules: evaluated once per detected object.
   rules:
     # Fire once, then stay quiet for 30s, on any confident person.
     - when: "label == 'person' and confidence > 0.8"
       action: "alert"
+      message: "Confident person detected"
+      severity: "warning"
       cooldown_s: 30
     # Fire on a person tracked for 5+ consecutive frames (loitering).
     - when: "label == 'person' and track_id is not None"
       action: "alert"
+      message: "Person loitering"
+      severity: "warning"
       min_consecutive_frames: 5
+  # Event-scope rules: evaluated once per frame over ALL detections.
+  event_rules:
+    # A group of three or more people is a higher-severity event.
+    - when: "count('person') >= 3"
+      message: "Crowd of 3+ people"
+      severity: "critical"
+      cooldown_s: 30
 
 sink:
   type: mqtt
