@@ -89,11 +89,12 @@ Each frame prints one `PerceptionEvent` as JSON:
   pipeline without hardware
 
 **Microcontroller brain ports (`firmware/`):**
-- Arduino Uno R4 WiFi — **verified on hardware**: the C++ brain compiles
-  with arduino-cli and its on-device self test passes 5/5, using 1284 B of
-  SRAM and making decisions byte-identical to the Python reference
-- The networked sketch (WiFi + MQTT), ESP32, Pico W and the MicroPython
-  port are **not flash-tested**
+- Arduino Uno R4 WiFi — **verified on hardware**. Both the self test (5/5,
+  1284 B SRAM) and the full networked sketch (WiFi + MQTT + JSON + the
+  AVOID→STOP memory flip over live MQTT) run on-device, decisions
+  byte-identical to the Python reference
+- Still not flash-tested: a real camera feeding it, and the ESP32, Pico W
+  and MicroPython targets
 
 ## Sensor support
 
