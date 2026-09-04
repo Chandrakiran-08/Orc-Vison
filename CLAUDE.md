@@ -80,10 +80,11 @@ production mode, audit log, UAV and industrial presets.
 
 ## Known gaps — read before claiming otherwise
 
-1. **Partly flashed.** `BrainSelfTest.ino` is verified on a real Arduino
-   Uno R4 WiFi (5/5 on-device, 1284 B SRAM, decisions identical to Python).
-   Still unproven on hardware: `UnoR4WiFiBrain.ino` (WiFiS3 /
-   ArduinoMqttClient / ArduinoJson are a different library surface), plus
+1. **Flashed and verified on Uno R4.** Both `BrainSelfTest.ino` (5/5
+   on-device) and the full networked `UnoR4WiFiBrain.ino` (WiFi + MQTT +
+   JSON parse + the AVOID→STOP memory flip over live MQTT) run on a real
+   Arduino Uno R4 WiFi, decisions identical to Python. Still unproven on
+   hardware: a real camera feeding it (synthetic events only so far), plus
    ESP32, Pico W, STM32 and the MicroPython port.
 2. **The firmware ports lack the platform-safety layer.** No battery,
    staleness, interlock or geofence handling in C++/MicroPython. Parity

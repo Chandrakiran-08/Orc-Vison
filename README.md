@@ -336,11 +336,12 @@ including the `AVOID → STOP` memory flip. The C++ builds clean under
 `-Wall -Wextra -Werror` with no heap allocation, no STL and no `String`.
 
 **Status:** the C++ brain is **verified on a real Arduino Uno R4 WiFi** —
-it cross-compiles with arduino-cli and its on-device self test passes 5/5,
-making the same decisions as the Python reference. The *networked* sketch
-(WiFi + MQTT + JSON) and the other boards are still unproven on hardware.
-See [`firmware/README.md`](firmware/README.md) for the full status table
-before trusting it near an actuator.
+both the on-device self test (5/5) and the full networked sketch (WiFi +
+MQTT + JSON parse + the AVOID→STOP memory flip over live MQTT) run on
+hardware, making the same decisions as the Python reference. Still unproven:
+a real camera feeding it, and the ESP32 / Pico W / STM32 / MicroPython
+targets. See [`firmware/README.md`](firmware/README.md) for the full status
+table before trusting it near an actuator.
 
 ### Built for UAVs and industrial automation
 

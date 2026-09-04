@@ -78,8 +78,8 @@ that avoiding failed.
 | Fits in Uno R4 SRAM | **Verified** (measured, test-enforced < 4 KB) |
 | Cross-compiles with the Arduino toolchain | **Verified** — arduino-cli 1.5.1, core `arduino:renesas_uno` |
 | `BrainSelfTest.ino` runs correctly on a real Uno R4 WiFi | **Verified** — 5/5 on-device, 2026-09-03 |
-| `UnoR4WiFiBrain.ino` cross-compiles for the Uno R4 | **Verified** — 79448 B flash (30%), 9108 B globals (27%) |
-| `UnoR4WiFiBrain.ino` *runs* on hardware | **NOT verified** — compiles, but never flashed |
+| `UnoR4WiFiBrain.ino` cross-compiles for the Uno R4 | **Verified** — ~77 KB flash (29%), 9.1 KB globals (27%) |
+| `UnoR4WiFiBrain.ino` full networked loop on hardware | **Verified** — WiFi + MQTT + JSON + memory flip, 2026-09-03 |
 | ESP32 / Pico W / STM32 hardware | **NOT verified** — no maintainer has flashed those |
 | MicroPython port on a real board | **NOT verified** |
 
@@ -109,10 +109,26 @@ Note the memory line: the brain is 1284 B of the 8036 B of globals; the rest
 is the Arduino core and serial buffers. There is 24 KB of headroom for the
 WiFi stack and JSON parsing on top.
 
-The networked `UnoR4WiFiBrain.ino` also cross-compiles for the board
-(79448 B flash, 9108 B globals — the whole WiFi/MQTT/JSON stack adds only
-about 1 KB of statics over the self test), but has not been *run* on
-hardware. Keep the actuator harmless (onboard LED) on its first run.
+The networked `UnoR4WiFiBrain.ino` is also verified on hardware. On a real
+Uno R4 WiFi it associates with the AP, connects to an MQTT broker,
+subscribes, parses a `PerceptionEvent` off `orcvision/events`, decides, and
+publishes the action to `orcvision/actions`. Driven through the memory-flip
+sequence (`firmware/board_demo.sh`) it chose `AVOID`, took failure feedback,
+then chose `STOP` for the identical message — the memory flip, over live
+MQTT, on the board:
+
+```
+Decision: AVOID (steer right)
+feedback: last action FAILED (will be avoided next time)
+Decision: STOP
+  - AVOID down-weighted: previously failed here
+```
+
+What remains unproven on hardware: a real camera feeding real detections (the
+board was driven by synthetic events here), the platform-safety layer (absent
+from the firmware — see the gap in the repo docs), and the ESP32 / Pico W /
+STM32 / MicroPython targets. Keep the actuator harmless (onboard LED) until
+you have watched it behave on your own bench.
 
 ### ArduinoJson version
 
